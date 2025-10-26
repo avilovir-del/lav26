@@ -280,9 +280,12 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Submission не найден' });
   }
   
+  // Обновляем статус
   submission.status = 'approved';
   submission.reviewedAt = new Date().toISOString();
+  submission.processed = false; // Важно: помечаем как необработанное
   
+  // Начисляем лавки пользователю
   const userId = submission.userId;
   if (!data.users[userId]) {
     data.users[userId] = { 
@@ -296,9 +299,12 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
   data.users[userId].lastActivity = new Date().toISOString();
   
   saveData(data);
-  res.json({ success: true, message: 'Задание подтверждено' });
+  res.json({ 
+    success: true, 
+    message: 'Задание подтверждено',
+    userNotified: false // Пользователь получит уведомление при следующей проверке
+  });
 });
-
 // Отклонить задание
 app.post('/api/admin/submissions/:id/reject', requireAuth, (req, res) => {
   const submissionId = parseInt(req.params.id);
@@ -460,4 +466,5 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
 
