@@ -17,6 +17,10 @@ function showScreen(name) {
     
     if (name === 'character') {
       setTimeout(liftCharacterImage, 50);
+    } else if (name === 'shop') {
+      setTimeout(() => {
+        loadShopItems();
+      }, 100);
     }
     
     setTimeout(() => {
@@ -44,14 +48,86 @@ function updateLavki() {
 // =====================
 // 🛍️ МАГАЗИН
 // =====================
-function buyItem(item, cost) {
-  if (lavki >= cost) {
-    lavki -= cost;
-    updateLavki();
-    alert(`Вы купили ${item} за ${cost} лавок!`);
-  } else {
-    alert('Недостаточно лавок 💎');
+
+async function loadShopItems() {
+  try {
+    const response = await fetch(`${API_BASE}/api/shop`);
+    if (response.ok) {
+      const shopItems = await response.json();
+      updateShopDisplay(shopItems);
+      localStorage.setItem('shopItems', JSON.stringify(shopItems));
+    }
+  } catch (error) {
+    console.log('Не удалось загрузить товары, используем локальные:', error);
+    const savedItems = localStorage.getItem('shopItems');
+    if (savedItems) {
+      updateShopDisplay(JSON.parse(savedItems));
+    }
   }
+}
+
+function updateShopDisplay(shopItems) {
+  const shopContainer = document.getElementById('shop-items');
+  if (!shopContainer) return;
+  
+  let shopHTML = '';
+  
+  const activeItems = shopItems.filter(item => item.active);
+  if (activeItems.length === 0) {
+    shopHTML = `
+      <div class="shop">
+        <div style="text-align: center; color: #666; padding: 20px;">
+          🏪 Магазин пуст
+          <br>
+          <small>Товары появятся позже</small>
+        </div>
+      </div>
+    `;
+  } else {
+    activeItems.forEach(item => {
+      shopHTML += `
+        <div class="shop">
+          <div>${item.name} — ${item.price} лавок</div>
+          <button onclick="buyItem('${item.name}', ${item.price}, ${item.id})">Купить</button>
+        </div>
+      `;
+    });
+  }
+  
+  shopContainer.innerHTML = shopHTML;
+}
+
+async function buyItem(itemName, cost, itemId) {
+  if (lavki >= cost) {
+    if (confirm(`Купить ${itemName} за ${cost} лавок?`)) {
+      lavki -= cost;
+      updateLavki();
+      
+      try {
+        await fetch(`${API_BASE}/api/buy-item`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itemId: itemId,
+            itemName: itemName,
+            cost: cost,
+            userId: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 'unknown'
+          })
+        });
+      } catch (error) {
+        console.log('Не удалось сохранить покупку на сервере:', error);
+      }
+      
+      showNotification(`Вы купили ${itemName} за ${cost} лавок! 🎉`, 'success');
+    }
+  } else {
+    showNotification('Недостаточно лавок 💎', 'error');
+  }
+}
+
+function refreshShop() {
+  showNotification('🔄 Обновляем магазин...', 'info');
+  loadShopItems();
 }
 
 // =====================
@@ -113,7 +189,7 @@ function loadCharacterName() {
 
 function initializeCharacterSelector() {
   const selector = document.getElementById('character-selector');
-  const currentCharacter = localStorage.getItem('characterImg') || 'images/1.jfif';
+  const currentCharacter = localStorage.getItem('characterImg') || 'images/1.png';
   
   if (selector) {
     const options = selector.querySelectorAll('.character-option');
@@ -567,6 +643,9 @@ async function initializeWithServer() {
       saveTasksToStorage();
       console.log('Задания синхронизированы с сервером');
     }
+    
+    await loadShopItems();
+    
   } catch (error) {
     console.log('Сервер недоступен, работаем в оффлайн режиме:', error);
   }
