@@ -294,6 +294,7 @@
             <ul class="nav-tabs">
                 <li><button onclick="showSection('dashboard')" class="active">📊 Дашборд</button></li>
                 <li><button onclick="showSection('submissions')">📸 Проверка заданий</button></li>
+                <li><button onclick="showSection('purchases')">🛒 Заявки на покупку</button></li>
                 <li><button onclick="showSection('users')">👥 Пользователи</button></li>
                 <li><button onclick="showSection('tasks')">📋 Управление заданиями</button></li>
                 <li><button onclick="showSection('shop')">🛍️ Управление магазином</button></li>
@@ -316,6 +317,30 @@
                 <h2>📸 Задания на проверку</h2>
                 <div id="submissions-list">
                     <!-- Список заданий загрузится через JS -->
+                </div>
+            </div>
+
+            <!-- Заявки на покупку -->
+            <div id="section-purchases" class="section">
+                <h2>🛒 Заявки на покупку</h2>
+                
+                <div class="stats-grid" style="margin-bottom: 20px;">
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-purchases">0</div>
+                        <div class="stat-label">Всего заявок</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="pending-purchases">0</div>
+                        <div class="stat-label">⏳ Ожидают</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="approved-purchases">0</div>
+                        <div class="stat-label">✅ Подтверждено</div>
+                    </div>
+                </div>
+
+                <div id="purchase-requests-list">
+                    <!-- Список заявок загрузится через JS -->
                 </div>
             </div>
 
