@@ -17,6 +17,9 @@ function showScreen(name) {
     
     if (name === 'character') {
       setTimeout(liftCharacterImage, 50);
+    } else if (name === 'tasks') {
+      // ПРОВЕРЯЕМ при открытии экрана заданий
+      setTimeout(checkApprovedTasks, 1000);
     } else if (name === 'shop') {
       setTimeout(() => {
         loadShopItems();
@@ -46,7 +49,7 @@ function updateLavki() {
 }
 
 // =====================
-// 🛍️ МАГАЗИН
+// 🛍️ ОБНОВЛЕННАЯ СИСТЕМА ПОКУПОК
 // =====================
 
 async function loadShopItems() {
@@ -97,28 +100,69 @@ function updateShopDisplay(shopItems) {
   shopContainer.innerHTML = shopHTML;
 }
 
+// =====================
+// 👤 УЛУЧШЕННАЯ ИДЕНТИФИКАЦИЯ ПОЛЬЗОВАТЕЛЕЙ
+// =====================
+
+// Функция для получения информации о пользователе
+function getUserInfo() {
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.initDataUnsafe?.user) {
+    const user = tg.initDataUnsafe.user;
+    return {
+      id: user.id.toString(),
+      firstName: user.first_name || 'Неизвестный',
+      lastName: user.last_name || '',
+      username: user.username ? `@${user.username}` : 'Не указан',
+      language: user.language_code || 'ru',
+      fullName: [user.first_name, user.last_name].filter(Boolean).join(' '),
+      contact: user.username ? `@${user.username}` : `ID: ${user.id}`
+    };
+  }
+  return {
+    id: `user_${Date.now()}`,
+    firstName: 'Аноним',
+    username: 'Не указан',
+    fullName: 'Анонимный пользователь',
+    contact: 'Не указан'
+  };
+}
+
 async function buyItem(itemName, cost, itemId) {
   if (lavki >= cost) {
-    if (confirm(`Купить ${itemName} за ${cost} лавок?`)) {
-      lavki -= cost;
-      updateLavki();
-      
+    // Получаем данные пользователя из Telegram
+    const userInfo = getUserInfo();
+    
+    if (confirm(`Отправить заявку на покупку "${itemName}" за ${cost} лавок?`)) {
       try {
-        await fetch(`${API_BASE}/api/buy-item`, {
+        const response = await fetch(`${API_BASE}/api/buy-item`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             itemId: itemId,
             itemName: itemName,
-            cost: cost,
-            userId: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 'unknown'
+            price: cost,
+            userId: userInfo.id,
+            userName: userInfo.fullName,
+            userContact: userInfo.contact
           })
         });
+
+        if (response.ok) {
+          // Резервируем лавки локально
+          lavki -= cost;
+          updateLavki();
+          
+          showNotification(`✅ Заявка на покупку "${itemName}" отправлена! Ожидайте подтверждения.`, 'success');
+        } else {
+          throw new Error('Ошибка сервера');
+        }
       } catch (error) {
-        console.log('Не удалось сохранить покупку на сервере:', error);
+        // Возвращаем лавки при ошибке
+        lavki += cost;
+        updateLavki();
+        showNotification('❌ Ошибка отправки заявки', 'error');
       }
-      
-      showNotification(`Вы купили ${itemName} за ${cost} лавок! 🎉`, 'success');
     }
   } else {
     showNotification('Недостаточно лавок 💎', 'error');
@@ -486,9 +530,7 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
   console.log('Отправка задания на сервер ID:', taskId);
   
   try {
-    const tg = window.Telegram?.WebApp;
-    const userId = tg?.initDataUnsafe?.user?.id || `user_${Date.now()}`;
-    const userName = tg?.initDataUnsafe?.user?.first_name || 'Пользователь';
+    const userInfo = getUserInfo();
     
     const response = await fetch(`${API_BASE}/api/submit-task`, {
       method: 'POST',
@@ -498,8 +540,9 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
       body: JSON.stringify({
         taskId: taskId,
         photo: photoDataUrl,
-        userId: userId,
-        userName: userName
+        userId: userInfo.id,
+        userName: userInfo.fullName,
+        userContact: userInfo.contact
       })
     });
 
@@ -508,13 +551,10 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
       console.log('Задание отправлено на проверку:', result);
       
       showNotification('📸 Фото отправлено на проверку! Ожидайте начисления лавок.', 'success');
-      
       markTaskAsPending(taskId);
-      
     } else {
       throw new Error('Ошибка сервера');
     }
-    
   } catch (error) {
     console.log('Сервер недоступен, сохраняем локально:', error);
     
@@ -544,14 +584,15 @@ function markTaskAsPending(taskId) {
     renderTasks();
   }
 }
+
 // =====================
 // 🔄 ПРОВЕРКА ПОДТВЕРЖДЕННЫХ ЗАДАНИЙ
 // =====================
 
 async function checkApprovedTasks() {
   try {
-    const tg = window.Telegram?.WebApp;
-    const userId = tg?.initDataUnsafe?.user?.id;
+    const userInfo = getUserInfo();
+    const userId = userInfo.id;
     
     if (!userId) return;
 
@@ -559,24 +600,26 @@ async function checkApprovedTasks() {
     if (response.ok) {
       const approvedTasks = await response.json();
       
-      approvedTasks.forEach(task => {
-        // Находим задание в локальном списке
-        const taskIndex = tasks.findIndex(t => t.id === task.taskId);
-        if (taskIndex !== -1 && !tasks[taskIndex].completed) {
-          // Начисляем лавки
-          lavki += tasks[taskIndex].reward;
-          tasks[taskIndex].completed = true;
-          tasks[taskIndex].pendingApproval = false;
-          
-          // Показываем уведомление
-          showNotification(`🎉 Задание "${tasks[taskIndex].name}" подтверждено! Получено ${tasks[taskIndex].reward} лавок`, 'success');
-          animateCharacterReward();
-        }
-      });
-      
-      updateLavki();
-      saveTasksToStorage();
-      renderTasks();
+      if (approvedTasks.length > 0) {
+        approvedTasks.forEach(task => {
+          // Находим задание в локальном списке
+          const taskIndex = tasks.findIndex(t => t.id === task.taskId);
+          if (taskIndex !== -1 && !tasks[taskIndex].completed) {
+            // Начисляем лавки
+            lavki += tasks[taskIndex].reward;
+            tasks[taskIndex].completed = true;
+            tasks[taskIndex].pendingApproval = false;
+            
+            // Показываем уведомление
+            showNotification(`🎉 Задание "${tasks[taskIndex].name}" подтверждено! Получено ${tasks[taskIndex].reward} лавок`, 'success');
+            animateCharacterReward();
+          }
+        });
+        
+        updateLavki();
+        saveTasksToStorage();
+        renderTasks();
+      }
     }
   } catch (error) {
     console.log('Ошибка проверки подтвержденных заданий:', error);
@@ -589,6 +632,7 @@ function startTaskChecking() {
     checkApprovedTasks();
   }, 30000); // 30 секунд
 }
+
 // =====================
 // АНИМАЦИЯ ПЕРСОНАЖА
 // =====================
@@ -800,5 +844,3 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
-
-
