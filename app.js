@@ -21,6 +21,7 @@ function showScreen(name) {
       // ПРОВЕРЯЕМ при открытии экрана заданий
       setTimeout(checkApprovedTasks, 1000);
       setTimeout(checkRejectedTasks, 1000);
+      setTimeout(loadTasksFromServer, 1000); // ДОБАВЛЕНО: загружаем актуальные задания
     } else if (name === 'shop') {
       setTimeout(() => {
         loadShopItems();
@@ -422,13 +423,55 @@ function showSuccessMessage(message) {
 // 📋 СИСТЕМА ЗАДАНИЙ
 // =====================
 
-const defaultTasks = [
-  { id: 1, name: "Покормить персонажа", reward: 5, completed: false, userPhoto: null },
-  { id: 2, name: "Поиграть с персонажем", reward: 10, completed: false, userPhoto: null },
-  { id: 3, name: "Дать персонажу поспать", reward: 8, completed: false, userPhoto: null },
-];
-
 let tasks = [];
+
+// ДОБАВЛЕНО: Загрузка заданий с сервера
+async function loadTasksFromServer() {
+  try {
+    const response = await fetch(`${API_BASE}/api/tasks`);
+    if (response.ok) {
+      const serverTasks = await response.json();
+      
+      // Сохраняем прогресс текущих заданий
+      const currentProgress = tasks.reduce((acc, task) => {
+        acc[task.id] = {
+          completed: task.completed,
+          userPhoto: task.userPhoto,
+          pendingApproval: task.pendingApproval,
+          wasRejected: task.wasRejected
+        };
+        return acc;
+      }, {});
+      
+      // Обновляем задания с сохранением прогресса
+      tasks = serverTasks.map(serverTask => {
+        const progress = currentProgress[serverTask.id];
+        if (progress) {
+          return {
+            ...serverTask,
+            completed: progress.completed,
+            userPhoto: progress.userPhoto,
+            pendingApproval: progress.pendingApproval,
+            wasRejected: progress.wasRejected
+          };
+        }
+        return { 
+          ...serverTask, 
+          completed: false, 
+          userPhoto: null, 
+          pendingApproval: false, 
+          wasRejected: false 
+        };
+      });
+      
+      saveTasksToStorage();
+      renderTasks();
+      console.log('Задания синхронизированы с сервером:', tasks);
+    }
+  } catch (error) {
+    console.log('Ошибка загрузки заданий с сервера:', error);
+  }
+}
 
 function initializeTasks() {
   const savedTasks = localStorage.getItem('tasks');
@@ -436,24 +479,16 @@ function initializeTasks() {
   if (savedTasks) {
     try {
       const parsedTasks = JSON.parse(savedTasks);
-      
-      tasks = defaultTasks.map(defaultTask => {
-        const savedTask = parsedTasks.find(t => t.id === defaultTask.id);
-        if (savedTask) {
-          return savedTask;
-        }
-        return { ...defaultTask };
-      });
-      
+      tasks = parsedTasks;
       console.log('Задания загружены из localStorage:', tasks);
     } catch (e) {
       console.error('Ошибка загрузки заданий:', e);
-      tasks = [...defaultTasks];
+      // Если ошибка, загружаем с сервера
+      loadTasksFromServer();
     }
   } else {
-    tasks = [...defaultTasks];
-    saveTasksToStorage();
-    console.log('Созданы новые задания:', tasks);
+    // Если нет локальных заданий, загружаем с сервера
+    loadTasksFromServer();
   }
 }
 
@@ -478,7 +513,21 @@ function renderTasks() {
 
   list.innerHTML = '';
 
-  tasks.forEach((task, i) => {
+  // Показываем только активные задания
+  const activeTasks = tasks.filter(task => task.active);
+  
+  if (activeTasks.length === 0) {
+    list.innerHTML = `
+      <div style="text-align: center; color: #666; padding: 40px;">
+        📝 Заданий пока нет
+        <br>
+        <small>Администратор добавит задания позже</small>
+      </div>
+    `;
+    return;
+  }
+
+  activeTasks.forEach((task, i) => {
     const li = document.createElement('li');
     li.className = 'task-item';
     
@@ -584,7 +633,7 @@ function renderTasks() {
   });
   
   updateStats();
-  console.log('Задания отрендерены:', tasks);
+  console.log('Задания отрендерены:', activeTasks);
 }
 
 // =====================
@@ -777,6 +826,13 @@ async function checkRejectedTasks() {
   }
 }
 
+// ДОБАВЛЕНО: Периодическая синхронизация заданий
+function startTasksSync() {
+  setInterval(() => {
+    loadTasksFromServer();
+  }, 30000); // 30 секунд
+}
+
 // Периодическая проверка каждые 30 секунд
 function startTaskChecking() {
   setInterval(() => {
@@ -863,28 +919,10 @@ function liftCharacterImage() {
 
 async function initializeWithServer() {
   try {
-    const response = await fetch(`${API_BASE}/api/tasks`);
-    if (response.ok) {
-      const serverTasks = await response.json();
-      
-      tasks = serverTasks.map(serverTask => {
-        const localTask = tasks.find(t => t.id === serverTask.id);
-        if (localTask) {
-          return {
-            ...serverTask,
-            completed: localTask.completed,
-            userPhoto: localTask.userPhoto,
-            pendingApproval: localTask.pendingApproval,
-            wasRejected: localTask.wasRejected
-          };
-        }
-        return { ...serverTask, completed: false, userPhoto: null, pendingApproval: false, wasRejected: false };
-      });
-      
-      saveTasksToStorage();
-      console.log('Задания синхронизированы с сервером');
-    }
+    // Загружаем задания с сервера
+    await loadTasksFromServer();
     
+    // Загружаем товары магазина
     await loadShopItems();
     
   } catch (error) {
@@ -978,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Запускаем проверку подтвержденных заданий
   setTimeout(() => {
     startTaskChecking();
+    startTasksSync(); // ДОБАВЛЕНО: синхронизация заданий
     // Первая проверка через 5 секунд после загрузки
     setTimeout(checkApprovedTasks, 5000);
     setTimeout(checkRejectedTasks, 5000);
