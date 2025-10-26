@@ -409,7 +409,30 @@ app.get('/api/admin/purchases', requireAuth, (req, res) => {
   const data = loadData();
   res.json(data.purchases || []);
 });
-
+// Получить подтвержденные задания для пользователя
+app.get('/api/user/:userId/approved-tasks', (req, res) => {
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  // Находим все подтвержденные задания пользователя
+  const approvedSubmissions = data.submissions.filter(
+    s => s.userId === userId && s.status === 'approved' && !s.processed
+  );
+  
+  // Отмечаем их как обработанные и возвращаем
+  const newApprovedTasks = [];
+  approvedSubmissions.forEach(submission => {
+    newApprovedTasks.push({
+      taskId: submission.taskId,
+      taskName: submission.taskName,
+      reward: submission.reward
+    });
+    submission.processed = true; // Помечаем как обработанное
+  });
+  
+  saveData(data);
+  res.json(newApprovedTasks);
+});
 // Статистика
 app.get('/api/admin/stats', requireAuth, (req, res) => {
   const data = loadData();
@@ -466,5 +489,6 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
 
 
