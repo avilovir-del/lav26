@@ -93,6 +93,9 @@ function showSection(sectionName) {
         case 'submissions':
             loadSubmissions();
             break;
+        case 'users':
+            loadUsers();
+            break;
         case 'tasks':
             loadTasks();
             break;
@@ -106,11 +109,23 @@ function showSection(sectionName) {
 async function loadDashboard() {
     try {
         const stats = await apiCall('/api/admin/stats');
+        const users = await apiCall('/api/admin/users');
         
+        const activeUsers = users.filter(user => {
+            if (!user.lastActivity) return false;
+            const lastActivity = new Date(user.lastActivity);
+            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            return lastActivity > weekAgo;
+        });
+
         const statsHTML = `
             <div class="stat-card">
                 <div class="stat-number">${stats.totalUsers}</div>
-                <div class="stat-label">👥 Пользователей</div>
+                <div class="stat-label">👥 Всего пользователей</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.activeUsers}</div>
+                <div class="stat-label">🟢 Активных</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">${stats.totalSubmissions}</div>
@@ -127,10 +142,6 @@ async function loadDashboard() {
             <div class="stat-card">
                 <div class="stat-number">${stats.activeTasks}</div>
                 <div class="stat-label">📋 Активных заданий</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">${stats.activeShopItems}</div>
-                <div class="stat-label">🛍️ Товаров в магазине</div>
             </div>
         `;
         
@@ -228,6 +239,174 @@ async function rejectSubmission(submissionId) {
     }
 }
 
+// Загрузка списка пользователей
+async function loadUsers() {
+    try {
+        const users = await apiCall('/api/admin/users');
+        
+        // Обновляем статистику
+        document.getElementById('total-users').textContent = users.length;
+        document.getElementById('total-lavki-users').textContent = users.reduce((sum, user) => sum + user.lavki, 0);
+        
+        const activeUsers = users.filter(user => {
+            if (!user.lastActivity) return false;
+            const lastActivity = new Date(user.lastActivity);
+            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            return lastActivity > weekAgo;
+        });
+        document.getElementById('active-users').textContent = activeUsers.length;
+        
+        if (users.length === 0) {
+            document.getElementById('users-list').innerHTML = `
+                <div class="empty-state">
+                    <div>👥</div>
+                    <h3>Пользователей пока нет</h3>
+                    <p>Как только пользователи начнут использовать приложение, они появятся здесь</p>
+                </div>
+            `;
+            return;
+        }
+
+        let usersHTML = '';
+        users.forEach(user => {
+            const isActive = user.lastActivity && (new Date(user.lastActivity) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+            
+            usersHTML += `
+                <div class="submission-item user-item" data-user-id="${user.id}" data-user-name="${user.id}">
+                    <div class="submission-header">
+                        <div>
+                            <div class="submission-user">👤 ID: ${user.id}</div>
+                            <div style="display: flex; gap: 15px; margin-top: 5px; font-size: 14px;">
+                                <span>💎 ${user.lavki} лавок</span>
+                                <span>✅ ${user.completedTasks || 0} заданий</span>
+                                <span class="status-badge ${isActive ? 'status-approved' : 'status-rejected'}">
+                                    ${isActive ? '🟢 Активен' : '⚫ Неактивен'}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="color: #7f8c8d; font-size: 12px;">
+                                📅 Регистрация: ${user.registrationDate ? new Date(user.registrationDate).toLocaleDateString('ru-RU') : 'Неизвестно'}
+                            </div>
+                            <div style="color: #7f8c8d; font-size: 12px; margin-top: 5px;">
+                                📍 Последняя активность: ${user.lastActivity ? new Date(user.lastActivity).toLocaleDateString('ru-RU') : 'Неизвестно'}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="submission-actions">
+                        <button onclick="viewUserDetails('${user.id}')" class="btn" style="background: #2196f3; color: white;">
+                            📊 Детали
+                        </button>
+                        <button onclick="editUserBalance('${user.id}', ${user.lavki})" class="btn" style="background: #ff9800; color: white;">
+                            💎 Изменить баланс
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        document.getElementById('users-list').innerHTML = usersHTML;
+    } catch (error) {
+        document.getElementById('users-list').innerHTML = '<div class="empty-state">Ошибка загрузки пользователей</div>';
+    }
+}
+
+// Поиск пользователей
+function filterUsers() {
+    const search = document.getElementById('user-search').value.toLowerCase();
+    const userItems = document.querySelectorAll('.user-item');
+    
+    userItems.forEach(item => {
+        const userName = item.getAttribute('data-user-name').toLowerCase();
+        if (userName.includes(search)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+// Просмотр деталей пользователя
+async function viewUserDetails(userId) {
+    try {
+        const userInfo = await apiCall(`/api/admin/users/${userId}`);
+        
+        const submissionsHTML = userInfo.submissions.map(sub => `
+            <div style="border: 1px solid #eee; padding: 10px; margin: 5px 0; border-radius: 5px;">
+                <div><strong>${sub.taskName}</strong> (+${sub.reward} лавок)</div>
+                <div style="font-size: 12px; color: #666;">
+                    Статус: ${sub.status === 'approved' ? '✅ Подтверждено' : sub.status === 'pending' ? '⏳ Ожидает' : '❌ Отклонено'}
+                    • ${new Date(sub.submittedAt).toLocaleDateString('ru-RU')}
+                </div>
+            </div>
+        `).join('');
+        
+        const modalHTML = `
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 10000;">
+                <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                    <h3>📊 Детали пользователя</h3>
+                    <div style="margin: 20px 0;">
+                        <p><strong>ID:</strong> ${userInfo.id}</p>
+                        <p><strong>💎 Баланс:</strong> ${userInfo.lavki} лавок</p>
+                        <p><strong>✅ Выполнено заданий:</strong> ${userInfo.completedTasks}</p>
+                        <p><strong>📅 Дата регистрации:</strong> ${userInfo.registrationDate ? new Date(userInfo.registrationDate).toLocaleDateString('ru-RU') : 'Неизвестно'}</p>
+                        <p><strong>📊 Всего отправок:</strong> ${userInfo.totalSubmissions}</p>
+                        <p><strong>✅ Подтверждено:</strong> ${userInfo.approvedSubmissions}</p>
+                        <p><strong>⏳ Ожидает:</strong> ${userInfo.pendingSubmissions}</p>
+                    </div>
+                    
+                    <h4>📋 История заданий:</h4>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${submissionsHTML || '<p>Заданий пока нет</p>'}
+                    </div>
+                    
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button onclick="closeModal()" class="btn" style="background: #666; color: white;">Закрыть</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    } catch (error) {
+        showNotification('Ошибка загрузки деталей пользователя', 'error');
+    }
+}
+
+// Изменение баланса пользователя
+async function editUserBalance(userId, currentBalance) {
+    const newBalance = prompt(`Введите новый баланс для пользователя ${userId}:`, currentBalance);
+    
+    if (newBalance === null) return;
+    
+    const balance = parseInt(newBalance);
+    if (isNaN(balance) || balance < 0) {
+        showNotification('Введите корректное число', 'error');
+        return;
+    }
+    
+    try {
+        await apiCall(`/api/admin/users/${userId}/balance`, {
+            method: 'PUT',
+            body: JSON.stringify({ lavki: balance })
+        });
+        
+        showNotification('Баланс пользователя обновлен!');
+        loadUsers();
+    } catch (error) {
+        showNotification('Ошибка обновления баланса', 'error');
+    }
+}
+
+// Закрытие модального окна
+function closeModal() {
+    const modal = document.querySelector('[style*="position: fixed; top: 0; left: 0; width: 100%"]');
+    if (modal) {
+        modal.remove();
+    }
+}
+
 // Загрузка списка заданий
 async function loadTasks() {
     try {
@@ -249,9 +428,6 @@ async function loadTasks() {
                             <button onclick="toggleTask(${task.id}, ${!task.active})" class="btn" 
                                     style="background: ${task.active ? '#ff9800' : '#4caf50'}; color: white; margin: 2px;">
                                 ${task.active ? '❌ Деактивировать' : '✅ Активировать'}
-                            </button>
-                            <button onclick="editTask(${task.id})" class="btn" style="background: #2196f3; color: white; margin: 2px;">
-                                ✏️ Редактировать
                             </button>
                         </div>
                     </div>
@@ -327,9 +503,6 @@ async function loadShop() {
                             <button onclick="toggleShopItem(${item.id}, ${!item.active})" class="btn" 
                                     style="background: ${item.active ? '#ff9800' : '#4caf50'}; color: white; margin: 2px;">
                                 ${item.active ? '❌ Снять с продажи' : '✅ Вернуть в продажу'}
-                            </button>
-                            <button onclick="editShopItem(${item.id})" class="btn" style="background: #2196f3; color: white; margin: 2px;">
-                                ✏️ Редактировать
                             </button>
                         </div>
                     </div>
@@ -416,15 +589,6 @@ async function changePassword() {
     } catch (error) {
         showNotification('Ошибка смены пароля', 'error');
     }
-}
-
-// Функции редактирования (заглушки)
-function editTask(taskId) {
-    showNotification('Функция редактирования в разработке');
-}
-
-function editShopItem(itemId) {
-    showNotification('Функция редактирования в разработке');
 }
 
 // Инициализация при загрузке
