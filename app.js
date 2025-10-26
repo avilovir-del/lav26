@@ -544,7 +544,51 @@ function markTaskAsPending(taskId) {
     renderTasks();
   }
 }
+// =====================
+// 🔄 ПРОВЕРКА ПОДТВЕРЖДЕННЫХ ЗАДАНИЙ
+// =====================
 
+async function checkApprovedTasks() {
+  try {
+    const tg = window.Telegram?.WebApp;
+    const userId = tg?.initDataUnsafe?.user?.id;
+    
+    if (!userId) return;
+
+    const response = await fetch(`${API_BASE}/api/user/${userId}/approved-tasks`);
+    if (response.ok) {
+      const approvedTasks = await response.json();
+      
+      approvedTasks.forEach(task => {
+        // Находим задание в локальном списке
+        const taskIndex = tasks.findIndex(t => t.id === task.taskId);
+        if (taskIndex !== -1 && !tasks[taskIndex].completed) {
+          // Начисляем лавки
+          lavki += tasks[taskIndex].reward;
+          tasks[taskIndex].completed = true;
+          tasks[taskIndex].pendingApproval = false;
+          
+          // Показываем уведомление
+          showNotification(`🎉 Задание "${tasks[taskIndex].name}" подтверждено! Получено ${tasks[taskIndex].reward} лавок`, 'success');
+          animateCharacterReward();
+        }
+      });
+      
+      updateLavki();
+      saveTasksToStorage();
+      renderTasks();
+    }
+  } catch (error) {
+    console.log('Ошибка проверки подтвержденных заданий:', error);
+  }
+}
+
+// Периодическая проверка каждые 30 секунд
+function startTaskChecking() {
+  setInterval(() => {
+    checkApprovedTasks();
+  }, 30000); // 30 секунд
+}
 // =====================
 // АНИМАЦИЯ ПЕРСОНАЖА
 // =====================
@@ -745,3 +789,4 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
