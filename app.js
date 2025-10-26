@@ -768,6 +768,17 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     initializeWithServer();
   }, 1000);
+  
+  // =====================
+  // 🔄 ЗАПУСК ПРОВЕРКИ ПОДТВЕРЖДЕННЫХ ЗАДАНИЙ
+  // =====================
+  
+  // Запускаем проверку подтвержденных заданий
+  setTimeout(() => {
+    startTaskChecking();
+    // Первая проверка через 5 секунд после загрузки
+    setTimeout(checkApprovedTasks, 5000);
+  }, 2000);
 });
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -789,4 +800,5 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
 
