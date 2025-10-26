@@ -40,14 +40,12 @@
 
     <!-- Экран магазина -->
     <div id="screen-shop" class="screen">
-      <h2>Магазин</h2>
-      <div class="shop">
-        <div>👕 Футболка — 10 лавок</div>
-        <button onclick="buyItem('Футболка',10)">Купить</button>
-      </div>
-      <div class="shop">
-        <div>🎁 Кружка — 50 лавок</div>
-        <button onclick="buyItem('Кружка',50)">Купить</button>
+      <h2>🛍️ Магазин</h2>
+      <button class="refresh-btn" onclick="refreshShop()" style="background: #2196f3; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; margin: 10px 0;">
+        🔄 Обновить
+      </button>
+      <div id="shop-items">
+        <!-- Товары загружаются через JS -->
       </div>
     </div>
 
