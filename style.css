@@ -18,7 +18,7 @@ body {
   align-items: center;
   position: relative;
   overflow-y: auto;
-  padding-bottom: 60px; /* Место для навигации */
+  padding-bottom: 60px;
 }
 
 .screen {
@@ -38,7 +38,6 @@ body {
   display: flex;
 }
 
-/* Заголовки */
 h2 {
   margin: 10px 0 20px 0;
   font-weight: 700;
@@ -46,9 +45,6 @@ h2 {
   font-size: 24px;
 }
 
-/* ===================== */
-/* 👤 ГЛАВНЫЙ ЭКРАН - КАРТИНКА ПОДНЯТА ВЫШЕ */
-/* ===================== */
 .character-header {
   text-align: center;
   margin-bottom: 2px;
@@ -131,14 +127,12 @@ h2 {
   font-size: 16px;
 }
 
-/* Переопределяем стили экрана для главного */
 #screen-character {
   padding: 0;
   justify-content: flex-start;
   gap: 0;
 }
 
-/* Для мобильных устройств */
 @media (max-width: 480px) {
   .character-header {
     margin-bottom: 1px;
@@ -181,7 +175,6 @@ h2 {
   }
 }
 
-/* Для очень маленьких экранов */
 @media (max-width: 360px) {
   .character-header {
     padding: 3px 5px 0 5px;
@@ -206,9 +199,6 @@ h2 {
   }
 }
 
-/* ===================== */
-/* ⚙️ НАСТРОЙКИ */
-/* ===================== */
 .settings-container {
   width: 100%;
   max-width: 400px;
@@ -350,9 +340,6 @@ h2 {
   opacity: 1;
 }
 
-/* ===================== */
-/* 📋 ЗАДАНИЯ */
-/* ===================== */
 #task-list {
   list-style: none;
   padding: 0;
@@ -427,9 +414,6 @@ h2 {
   transform: translateY(-1px);
 }
 
-/* ===================== */
-/* 🏪 МАГАЗИН */
-/* ===================== */
 .shop {
   background: white;
   padding: 20px;
@@ -459,7 +443,6 @@ h2 {
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
 
-/* 💎 Счётчик лавок */
 .lavki-counter {
   position: fixed;
   top: 10px;
@@ -473,99 +456,6 @@ h2 {
   z-index: 100;
 }
 
-/* 📸 Стили для загрузки фото */
-.photo-upload-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0;
-}
-
-.photo-preview {
-  max-width: 200px;
-  max-height: 200px;
-  border-radius: 10px;
-  border: 2px solid #4caf50;
-  display: none;
-}
-
-.photo-preview.visible {
-  display: block;
-}
-
-.upload-btn {
-  background: #2196f3;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.upload-btn:hover {
-  background: #1976d2;
-}
-
-.upload-btn:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-
-/* 📋 Список заданий улучшенный */
-.task-item {
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  padding: 15px;
-  margin-bottom: 15px;
-  text-align: left;
-  position: relative;
-}
-
-.task-item img {
-  width: 100%;
-  max-height: 200px;
-  border-radius: 8px;
-  margin-top: 10px;
-  object-fit: cover;
-}
-
-.task-buttons {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
-  gap: 8px;
-}
-
-.task-buttons button {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.task-buttons .complete {
-  background: #2196f3;
-  color: white;
-}
-
-.task-buttons .complete:hover {
-  background: #1976d2;
-}
-
-.task-buttons .delete {
-  background: #f44336;
-  color: white;
-}
-
-.task-buttons .delete:hover {
-  background: #d32f2f;
-}
-
-/* 💃 Анимация персонажа при получении награды */
 @keyframes bounce {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-20px); }
@@ -575,7 +465,6 @@ h2 {
   animation: bounce 0.8s ease;
 }
 
-/* 📱 Адаптивность для мобильных */
 @media (max-width: 480px) {
   .task-item {
     padding: 10px;
@@ -605,7 +494,6 @@ h2 {
   }
 }
 
-/* Стили для выполненных заданий */
 .task-item.completed {
   background: #f8fff8;
   border-left: 4px solid #4caf50;
@@ -618,13 +506,11 @@ h2 {
   font-size: 14px;
 }
 
-/* Улучшенные стили для фото */
 .task-item img[alt="Ваше фото"] {
   border: 2px solid #4caf50 !important;
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
 }
 
-/* Стили для статуса выполнения */
 .task-completed-text {
   color: #4caf50;
   font-weight: bold;
@@ -637,9 +523,6 @@ h2 {
   font-size: 14px;
 }
 
-/* ===================== */
-/* ⚙️ СТИЛИ НАСТРОЕК улучшенные */
-/* ===================== */
 .settings-container {
   width: 90%;
   max-width: 400px;
@@ -756,7 +639,6 @@ h2 {
   opacity: 1;
 }
 
-/* Стили для главного экрана с именем */
 .character-header {
   text-align: center;
   margin-bottom: 20px;
@@ -776,7 +658,6 @@ h2 {
   font-style: italic;
 }
 
-/* Анимации */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -792,7 +673,6 @@ h2 {
   animation: slideIn 0.5s ease;
 }
 
-/* Адаптивность */
 @media (max-width: 480px) {
   .character-select-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -803,9 +683,6 @@ h2 {
   }
 }
 
-/* ===================== */
-/* 📱 НАВИГАЦИЯ */
-/* ===================== */
 .nav {
   display: flex;
   justify-content: space-around;
@@ -839,9 +716,6 @@ h2 {
   transform: scale(1.1);
 }
 
-/* ===================== */
-/* 🔔 УВЕДОМЛЕНИЯ */
-/* ===================== */
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -852,9 +726,6 @@ h2 {
   to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
 }
 
-/* ===================== */
-/* 🎨 ОБЩИЕ СТИЛИ */
-/* ===================== */
 * {
   box-sizing: border-box;
 }
@@ -870,7 +741,6 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Улучшение скролла */
 .app {
   scrollbar-width: thin;
   scrollbar-color: #4caf50 #f0f4f8;
@@ -889,12 +759,10 @@ button {
   border-radius: 3px;
 }
 
-/* Плавные переходы */
 .screen {
   transition: opacity 0.3s ease;
 }
 
-/* Улучшение доступности */
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
