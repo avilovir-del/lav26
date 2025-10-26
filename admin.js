@@ -93,7 +93,7 @@ function showSection(sectionName) {
         case 'submissions':
             loadSubmissions();
             break;
-        case 'purchases': // ДОБАВЛЕНО: загрузка заявок на покупку
+        case 'purchases':
             loadPurchaseRequests();
             break;
         case 'users':
@@ -254,7 +254,7 @@ async function rejectSubmission(submissionId) {
     }
 }
 
-// ДОБАВЛЕНО: Загрузка заявок на покупку
+// Загрузка заявок на покупку
 async function loadPurchaseRequests() {
     try {
         const requests = await apiCall('/api/admin/purchase-requests');
@@ -331,7 +331,7 @@ async function loadPurchaseRequests() {
     }
 }
 
-// ДОБАВЛЕНО: Обработка заявки на покупку
+// Обработка заявки на покупку
 async function processPurchaseRequest(requestId, status) {
     const action = status === 'approved' ? 'подтвердить' : 'отклонить';
     
@@ -422,6 +422,9 @@ async function loadUsers() {
                         <button onclick="editUserBalance('${user.id}', ${user.lavki})" class="btn" style="background: #ff9800; color: white;">
                             💎 Изменить баланс
                         </button>
+                        <button onclick="resetUserCharacter('${user.id}')" class="btn" style="background: #f44336; color: white;">
+                            🔄 Сбросить персонажа
+                        </button>
                     </div>
                 </div>
             `;
@@ -430,6 +433,23 @@ async function loadUsers() {
         document.getElementById('users-list').innerHTML = usersHTML;
     } catch (error) {
         document.getElementById('users-list').innerHTML = '<div class="empty-state">Ошибка загрузки пользователей</div>';
+    }
+}
+
+// ДОБАВЛЕНО: Сброс персонажа пользователя
+async function resetUserCharacter(userId) {
+    if (!confirm(`Вы уверены, что хотите сбросить персонажа пользователя ${userId}?\n\nЭто действие:\n• Обнулит все лавки\n• Сбросит прогресс заданий\n• Удалит историю покупок\n• Сбросит статистику`)) return;
+    
+    try {
+        await apiCall(`/api/admin/users/${userId}/reset`, {
+            method: 'POST'
+        });
+        
+        showNotification('Персонаж пользователя сброшен!');
+        loadUsers();
+        loadDashboard();
+    } catch (error) {
+        showNotification('Ошибка сброса персонажа', 'error');
     }
 }
 
@@ -739,4 +759,3 @@ document.addEventListener('DOMContentLoaded', function() {
         loadDashboard();
     }
 });
-
