@@ -20,6 +20,7 @@ function showScreen(name) {
     } else if (name === 'tasks') {
       // ПРОВЕРЯЕМ при открытии экрана заданий
       setTimeout(checkApprovedTasks, 1000);
+      setTimeout(checkRejectedTasks, 1000);
     } else if (name === 'shop') {
       setTimeout(() => {
         loadShopItems();
@@ -396,6 +397,9 @@ function renderTasks() {
     } else if (task.pendingApproval) {
       li.style.background = '#fff3cd';
       li.style.borderLeft = '4px solid #ff9800';
+    } else if (task.wasRejected) {
+      li.style.background = '#ffeaa7';
+      li.style.borderLeft = '4px solid #e17055';
     }
 
     const divName = document.createElement('div');
@@ -406,6 +410,8 @@ function renderTasks() {
       divName.innerHTML = `✅ <s>${task.name}</s>`;
     } else if (task.pendingApproval) {
       divName.innerHTML = `⏳ ${task.name} (на проверке)`;
+    } else if (task.wasRejected) {
+      divName.innerHTML = `🔄 ${task.name} (можно отправить снова)`;
     } else {
       divName.innerHTML = `📝 ${task.name}`;
     }
@@ -454,7 +460,14 @@ function renderTasks() {
 
       const uploadBtn = document.createElement('button');
       uploadBtn.className = 'complete';
-      uploadBtn.textContent = `Прикрепить фото (+${task.reward} лавок)`;
+      
+      if (task.wasRejected) {
+        uploadBtn.textContent = `🔄 Отправить снова (+${task.reward} лавок)`;
+        uploadBtn.style.background = '#e17055';
+      } else {
+        uploadBtn.textContent = `Прикрепить фото (+${task.reward} лавок)`;
+      }
+      
       uploadBtn.onclick = () => {
         console.log('Клик по кнопке загрузки для задания:', task.id);
         fileInput.click();
@@ -532,6 +545,13 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
   try {
     const userInfo = getUserInfo();
     
+    // Сначала проверяем, не было ли это задание ранее отклонено
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex !== -1 && tasks[taskIndex].wasRejected) {
+      // Убираем пометку о предыдущем отклонении
+      tasks[taskIndex].wasRejected = false;
+    }
+    
     const response = await fetch(`${API_BASE}/api/submit-task`, {
       method: 'POST',
       headers: {
@@ -580,6 +600,8 @@ function markTaskAsPending(taskId) {
   if (taskIndex !== -1) {
     tasks[taskIndex].pendingApproval = true;
     tasks[taskIndex].completed = false;
+    // Убираем пометку о предыдущем отклонении при новой отправке
+    tasks[taskIndex].wasRejected = false;
     saveTasksToStorage();
     renderTasks();
   }
@@ -626,10 +648,50 @@ async function checkApprovedTasks() {
   }
 }
 
+// =====================
+// 🔄 ПРОВЕРКА ОТКЛОНЕННЫХ ЗАДАНИЙ
+// =====================
+
+async function checkRejectedTasks() {
+  try {
+    const userInfo = getUserInfo();
+    const userId = userInfo.id;
+    
+    if (!userId) return;
+
+    const response = await fetch(`${API_BASE}/api/user/${userId}/rejected-tasks`);
+    if (response.ok) {
+      const rejectedTasks = await response.json();
+      
+      if (rejectedTasks.length > 0) {
+        rejectedTasks.forEach(task => {
+          // Находим задание в локальном списке и сбрасываем статус
+          const taskIndex = tasks.findIndex(t => t.id === task.taskId);
+          if (taskIndex !== -1) {
+            tasks[taskIndex].completed = false;
+            tasks[taskIndex].pendingApproval = false;
+            tasks[taskIndex].userPhoto = null;
+            tasks[taskIndex].wasRejected = true; // Помечаем как отклоненное
+            
+            // Показываем уведомление с причиной отклонения
+            showNotification(`❌ Задание "${tasks[taskIndex].name}" отклонено: ${task.rejectionReason}`, 'error');
+          }
+        });
+        
+        saveTasksToStorage();
+        renderTasks();
+      }
+    }
+  } catch (error) {
+    console.log('Ошибка проверки отклоненных заданий:', error);
+  }
+}
+
 // Периодическая проверка каждые 30 секунд
 function startTaskChecking() {
   setInterval(() => {
     checkApprovedTasks();
+    checkRejectedTasks(); // ДОБАВЛЕНО: проверка отклоненных заданий
   }, 30000); // 30 секунд
 }
 
@@ -722,10 +784,11 @@ async function initializeWithServer() {
             ...serverTask,
             completed: localTask.completed,
             userPhoto: localTask.userPhoto,
-            pendingApproval: localTask.pendingApproval
+            pendingApproval: localTask.pendingApproval,
+            wasRejected: localTask.wasRejected
           };
         }
-        return { ...serverTask, completed: false, userPhoto: null, pendingApproval: false };
+        return { ...serverTask, completed: false, userPhoto: null, pendingApproval: false, wasRejected: false };
       });
       
       saveTasksToStorage();
@@ -822,6 +885,7 @@ document.addEventListener('DOMContentLoaded', () => {
     startTaskChecking();
     // Первая проверка через 5 секунд после загрузки
     setTimeout(checkApprovedTasks, 5000);
+    setTimeout(checkRejectedTasks, 5000);
   }, 2000);
 });
 
