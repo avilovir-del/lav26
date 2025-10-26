@@ -1,7 +1,7 @@
 {
-  "name": "lavki-admin",
+  "name": "lavki-app",
   "version": "1.0.0",
-  "description": "Admin panel for Lavki Telegram Mini App",
+  "description": "Telegram Mini App for Lavki with admin panel",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
