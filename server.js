@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static('.')); // Для раздачи статических файлов
+app.use(express.static('.'));
 
 // Файл данных
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -28,7 +28,7 @@ function loadData() {
   // Данные по умолчанию
   return {
     admin: {
-      password: bcrypt.hashSync("admin123", 10) // Пароль по умолчанию
+      password: bcrypt.hashSync("admin123", 10)
     },
     users: {},
     tasks: [
@@ -40,7 +40,8 @@ function loadData() {
       { id: 1, name: "👕 Футболка", price: 10, active: true },
       { id: 2, name: "🎁 Кружка", price: 50, active: true }
     ],
-    submissions: []
+    submissions: [],
+    purchases: []
   };
 }
 
@@ -81,6 +82,18 @@ app.post('/api/submit-task', (req, res) => {
     return res.status(404).json({ error: 'Задание не найдено' });
   }
 
+  // Создаем или обновляем данные пользователя
+  if (!data.users[userId]) {
+    data.users[userId] = {
+      lavki: 0,
+      registrationDate: new Date().toISOString(),
+      completedTasks: 0,
+      lastActivity: new Date().toISOString()
+    };
+  } else {
+    data.users[userId].lastActivity = new Date().toISOString();
+  }
+
   // Создаем submission
   const submission = {
     id: Date.now(),
@@ -90,7 +103,7 @@ app.post('/api/submit-task', (req, res) => {
     userName: userName || 'Аноним',
     photo,
     reward: task.reward,
-    status: 'pending', // pending, approved, rejected
+    status: 'pending',
     submittedAt: new Date().toISOString()
   };
 
@@ -113,6 +126,90 @@ app.get('/api/shop', (req, res) => {
   const data = loadData();
   const activeItems = data.shop.filter(item => item.active);
   res.json(activeItems);
+});
+
+// Покупка товара
+app.post('/api/buy-item', (req, res) => {
+  const { itemId, itemName, cost, userId } = req.body;
+  const data = loadData();
+  
+  if (!data.purchases) {
+    data.purchases = [];
+  }
+  
+  data.purchases.push({
+    id: Date.now(),
+    itemId,
+    itemName,
+    cost,
+    userId,
+    purchasedAt: new Date().toISOString()
+  });
+  
+  saveData(data);
+  res.json({ success: true, message: 'Покупка сохранена' });
+});
+
+// ======================
+// 👥 API ДЛЯ ПОЛЬЗОВАТЕЛЕЙ
+// ======================
+
+// Получить список всех пользователей
+app.get('/api/admin/users', requireAuth, (req, res) => {
+  const data = loadData();
+  
+  const users = Object.entries(data.users).map(([userId, userData]) => ({
+    id: userId,
+    lavki: userData.lavki || 0,
+    registrationDate: userData.registrationDate || 'Неизвестно',
+    completedTasks: userData.completedTasks || 0,
+    lastActivity: userData.lastActivity || 'Неизвестно'
+  }));
+  
+  res.json(users);
+});
+
+// Получить детальную информацию о пользователе
+app.get('/api/admin/users/:userId', requireAuth, (req, res) => {
+  const data = loadData();
+  const userId = req.params.userId;
+  
+  const user = data.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: 'Пользователь не найден' });
+  }
+  
+  const userSubmissions = data.submissions.filter(s => s.userId === userId);
+  
+  const userInfo = {
+    id: userId,
+    lavki: user.lavki || 0,
+    registrationDate: user.registrationDate || 'Неизвестно',
+    completedTasks: user.completedTasks || 0,
+    lastActivity: user.lastActivity || 'Неизвестно',
+    totalSubmissions: userSubmissions.length,
+    approvedSubmissions: userSubmissions.filter(s => s.status === 'approved').length,
+    pendingSubmissions: userSubmissions.filter(s => s.status === 'pending').length,
+    submissions: userSubmissions
+  };
+  
+  res.json(userInfo);
+});
+
+// Обновить баланс пользователя
+app.put('/api/admin/users/:userId/balance', requireAuth, (req, res) => {
+  const { lavki } = req.body;
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  if (!data.users[userId]) {
+    data.users[userId] = { lavki: 0 };
+  }
+  
+  data.users[userId].lavki = parseInt(lavki);
+  saveData(data);
+  
+  res.json({ success: true, message: 'Баланс обновлен' });
 });
 
 // ======================
@@ -158,16 +255,20 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Submission не найден' });
   }
   
-  // Обновляем статус
   submission.status = 'approved';
   submission.reviewedAt = new Date().toISOString();
   
-  // Начисляем лавки пользователю
   const userId = submission.userId;
   if (!data.users[userId]) {
-    data.users[userId] = { lavki: 0 };
+    data.users[userId] = { 
+      lavki: 0,
+      completedTasks: 0,
+      registrationDate: new Date().toISOString()
+    };
   }
   data.users[userId].lavki += submission.reward;
+  data.users[userId].completedTasks = (data.users[userId].completedTasks || 0) + 1;
+  data.users[userId].lastActivity = new Date().toISOString();
   
   saveData(data);
   res.json({ success: true, message: 'Задание подтверждено' });
@@ -272,17 +373,33 @@ app.put('/api/admin/shop/:id', requireAuth, (req, res) => {
   }
 });
 
+// Получить историю покупок
+app.get('/api/admin/purchases', requireAuth, (req, res) => {
+  const data = loadData();
+  res.json(data.purchases || []);
+});
+
 // Статистика
 app.get('/api/admin/stats', requireAuth, (req, res) => {
   const data = loadData();
   
+  const users = Object.values(data.users);
+  const activeUsers = users.filter(user => {
+    if (!user.lastActivity) return false;
+    const lastActivity = new Date(user.lastActivity);
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    return lastActivity > weekAgo;
+  });
+  
   const stats = {
-    totalUsers: Object.keys(data.users).length,
+    totalUsers: users.length,
+    activeUsers: activeUsers.length,
     totalSubmissions: data.submissions.length,
     pendingSubmissions: data.submissions.filter(s => s.status === 'pending').length,
-    totalLavki: Object.values(data.users).reduce((sum, user) => sum + user.lavki, 0),
+    totalLavki: users.reduce((sum, user) => sum + (user.lavki || 0), 0),
     activeTasks: data.tasks.filter(t => t.active).length,
-    activeShopItems: data.shop.filter(i => i.active).length
+    activeShopItems: data.shop.filter(i => i.active).length,
+    totalPurchases: (data.purchases || []).length
   };
   
   res.json(stats);
@@ -293,7 +410,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Раздача админ-панели
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
