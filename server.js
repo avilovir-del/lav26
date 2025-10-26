@@ -41,7 +41,8 @@ function loadData() {
       { id: 2, name: "🎁 Кружка", price: 50, active: true }
     ],
     submissions: [],
-    purchases: []
+    purchases: [],
+    purchaseRequests: []
   };
 }
 
@@ -73,7 +74,7 @@ app.get('/api/tasks', (req, res) => {
 
 // Отправить задание на проверку
 app.post('/api/submit-task', (req, res) => {
-  const { taskId, photo, userId, userName } = req.body;
+  const { taskId, photo, userId, userName, userContact } = req.body;
   
   const data = loadData();
   const task = data.tasks.find(t => t.id === taskId);
@@ -88,10 +89,14 @@ app.post('/api/submit-task', (req, res) => {
       lavki: 0,
       registrationDate: new Date().toISOString(),
       completedTasks: 0,
-      lastActivity: new Date().toISOString()
+      lastActivity: new Date().toISOString(),
+      userName: userName || 'Аноним',
+      userContact: userContact || 'Не указан'
     };
   } else {
     data.users[userId].lastActivity = new Date().toISOString();
+    data.users[userId].userName = userName || data.users[userId].userName;
+    data.users[userId].userContact = userContact || data.users[userId].userContact;
   }
 
   // Создаем submission
@@ -101,6 +106,7 @@ app.post('/api/submit-task', (req, res) => {
     taskName: task.name,
     userId: userId || 'unknown',
     userName: userName || 'Аноним',
+    userContact: userContact || 'Не указан',
     photo,
     reward: task.reward,
     status: 'pending',
@@ -128,26 +134,115 @@ app.get('/api/shop', (req, res) => {
   res.json(activeItems);
 });
 
-// Покупка товара
+// ======================
+// 🛒 API ДЛЯ ПОКУПОК И ЗАЯВОК
+// ======================
+
+// Отправить заявку на покупку
 app.post('/api/buy-item', (req, res) => {
-  const { itemId, itemName, cost, userId } = req.body;
+  const { itemId, itemName, price, userId, userName, userContact } = req.body;
   const data = loadData();
   
-  if (!data.purchases) {
-    data.purchases = [];
+  // Создаем заявку вместо прямой покупки
+  if (!data.purchaseRequests) {
+    data.purchaseRequests = [];
   }
   
-  data.purchases.push({
+  const purchaseRequest = {
     id: Date.now(),
     itemId,
     itemName,
-    cost,
+    price,
     userId,
-    purchasedAt: new Date().toISOString()
+    userName: userName || 'Неизвестный',
+    userContact: userContact || 'Не указан',
+    status: 'pending',
+    requestedAt: new Date().toISOString(),
+    processedAt: null
+  };
+  
+  data.purchaseRequests.push(purchaseRequest);
+  saveData(data);
+  
+  res.json({ success: true, message: 'Заявка на покупку отправлена администратору' });
+});
+
+// Получить все заявки на покупку (для админки)
+app.get('/api/admin/purchase-requests', requireAuth, (req, res) => {
+  const data = loadData();
+  const requests = data.purchaseRequests || [];
+  // Сортируем по дате (новые сверху)
+  requests.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+  res.json(requests);
+});
+
+// Обработать заявку на покупку
+app.post('/api/admin/purchase-requests/:id/process', requireAuth, (req, res) => {
+  const { status, adminNotes } = req.body;
+  const requestId = parseInt(req.params.id);
+  const data = loadData();
+  
+  const request = data.purchaseRequests.find(r => r.id === requestId);
+  if (!request) {
+    return res.status(404).json({ error: 'Заявка не найдена' });
+  }
+  
+  request.status = status;
+  request.processedAt = new Date().toISOString();
+  request.adminNotes = adminNotes;
+  
+  // Если подтверждено, списываем лавки
+  if (status === 'approved' && data.users[request.userId]) {
+    if (data.users[request.userId].lavki >= request.price) {
+      data.users[request.userId].lavki -= request.price;
+    }
+    
+    // Сохраняем историю покупок
+    if (!data.purchases) {
+      data.purchases = [];
+    }
+    data.purchases.push({
+      id: Date.now(),
+      itemId: request.itemId,
+      itemName: request.itemName,
+      price: request.price,
+      userId: request.userId,
+      userName: request.userName,
+      purchasedAt: new Date().toISOString()
+    });
+  }
+  
+  saveData(data);
+  res.json({ success: true, message: `Заявка ${status === 'approved' ? 'подтверждена' : 'отклонена'}` });
+});
+
+// ======================
+// 🔄 ПРОВЕРКА ПОДТВЕРЖДЕННЫХ ЗАДАНИЙ
+// ======================
+
+// Получить подтвержденные задания для пользователя
+app.get('/api/user/:userId/approved-tasks', (req, res) => {
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  // Находим все подтвержденные задания пользователя
+  const approvedSubmissions = data.submissions.filter(
+    s => s.userId === userId && s.status === 'approved' && !s.processed
+  );
+  
+  // Отмечаем их как обработанные и возвращаем
+  const newApprovedTasks = [];
+  approvedSubmissions.forEach(submission => {
+    newApprovedTasks.push({
+      taskId: submission.taskId,
+      taskName: submission.taskName,
+      reward: submission.reward
+    });
+    submission.processed = true; // Помечаем как обработанное
   });
   
   saveData(data);
-  res.json({ success: true, message: 'Покупка сохранена' });
+  res.json(newApprovedTasks);
 });
 
 // ======================
@@ -163,7 +258,9 @@ app.get('/api/admin/users', requireAuth, (req, res) => {
     lavki: userData.lavki || 0,
     registrationDate: userData.registrationDate || 'Неизвестно',
     completedTasks: userData.completedTasks || 0,
-    lastActivity: userData.lastActivity || 'Неизвестно'
+    lastActivity: userData.lastActivity || 'Неизвестно',
+    userName: userData.userName || 'Аноним',
+    userContact: userData.userContact || 'Не указан'
   }));
   
   res.json(users);
@@ -180,6 +277,8 @@ app.get('/api/admin/users/:userId', requireAuth, (req, res) => {
   }
   
   const userSubmissions = data.submissions.filter(s => s.userId === userId);
+  const userPurchases = (data.purchases || []).filter(p => p.userId === userId);
+  const userRequests = (data.purchaseRequests || []).filter(r => r.userId === userId);
   
   const userInfo = {
     id: userId,
@@ -187,40 +286,20 @@ app.get('/api/admin/users/:userId', requireAuth, (req, res) => {
     registrationDate: user.registrationDate || 'Неизвестно',
     completedTasks: user.completedTasks || 0,
     lastActivity: user.lastActivity || 'Неизвестно',
+    userName: user.userName || 'Аноним',
+    userContact: user.userContact || 'Не указан',
     totalSubmissions: userSubmissions.length,
     approvedSubmissions: userSubmissions.filter(s => s.status === 'approved').length,
     pendingSubmissions: userSubmissions.filter(s => s.status === 'pending').length,
-    submissions: userSubmissions
+    totalPurchases: userPurchases.length,
+    totalRequests: userRequests.length,
+    submissions: userSubmissions,
+    purchases: userPurchases
   };
   
   res.json(userInfo);
 });
-// Получить подтвержденные задания для пользователя
-app.get('/api/user/:userId/approved-tasks', (req, res) => {
-  const userId = req.params.userId;
-  const data = loadData();
-  
-  // Находим все подтвержденные задания пользователя
-  const approvedSubmissions = data.submissions.filter(
-    s => s.userId === userId && s.status === 'approved'
-  );
-  
-  // Отмечаем их как обработанные и возвращаем
-  const newApprovedTasks = [];
-  approvedSubmissions.forEach(submission => {
-    if (!submission.processed) {
-      newApprovedTasks.push({
-        taskId: submission.taskId,
-        taskName: submission.taskName,
-        reward: submission.reward
-      });
-      submission.processed = true; // Помечаем как обработанное
-    }
-  });
-  
-  saveData(data);
-  res.json(newApprovedTasks);
-});
+
 // Обновить баланс пользователя
 app.put('/api/admin/users/:userId/balance', requireAuth, (req, res) => {
   const { lavki } = req.body;
@@ -305,6 +384,7 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
     userNotified: false // Пользователь получит уведомление при следующей проверке
   });
 });
+
 // Отклонить задание
 app.post('/api/admin/submissions/:id/reject', requireAuth, (req, res) => {
   const submissionId = parseInt(req.params.id);
@@ -409,30 +489,7 @@ app.get('/api/admin/purchases', requireAuth, (req, res) => {
   const data = loadData();
   res.json(data.purchases || []);
 });
-// Получить подтвержденные задания для пользователя
-app.get('/api/user/:userId/approved-tasks', (req, res) => {
-  const userId = req.params.userId;
-  const data = loadData();
-  
-  // Находим все подтвержденные задания пользователя
-  const approvedSubmissions = data.submissions.filter(
-    s => s.userId === userId && s.status === 'approved' && !s.processed
-  );
-  
-  // Отмечаем их как обработанные и возвращаем
-  const newApprovedTasks = [];
-  approvedSubmissions.forEach(submission => {
-    newApprovedTasks.push({
-      taskId: submission.taskId,
-      taskName: submission.taskName,
-      reward: submission.reward
-    });
-    submission.processed = true; // Помечаем как обработанное
-  });
-  
-  saveData(data);
-  res.json(newApprovedTasks);
-});
+
 // Статистика
 app.get('/api/admin/stats', requireAuth, (req, res) => {
   const data = loadData();
@@ -445,6 +502,9 @@ app.get('/api/admin/stats', requireAuth, (req, res) => {
     return lastActivity > weekAgo;
   });
   
+  const purchaseRequests = data.purchaseRequests || [];
+  const pendingRequests = purchaseRequests.filter(r => r.status === 'pending');
+  
   const stats = {
     totalUsers: users.length,
     activeUsers: activeUsers.length,
@@ -453,7 +513,9 @@ app.get('/api/admin/stats', requireAuth, (req, res) => {
     totalLavki: users.reduce((sum, user) => sum + (user.lavki || 0), 0),
     activeTasks: data.tasks.filter(t => t.active).length,
     activeShopItems: data.shop.filter(i => i.active).length,
-    totalPurchases: (data.purchases || []).length
+    totalPurchases: (data.purchases || []).length,
+    totalPurchaseRequests: purchaseRequests.length,
+    pendingPurchaseRequests: pendingRequests.length
   };
   
   res.json(stats);
@@ -489,6 +551,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
-
-
