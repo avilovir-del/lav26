@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Лавчик — мини-приложение</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+  <!-- Счётчик лавок -->
+  <div class="lavki-counter">
+    💎 <span id="lavki-amount">0</span>
+  </div>
+
+  <div class="app">
+    <!-- Экран персонажа -->
+    <div id="screen-character" class="screen active">
+      <div class="character-header">
+        <div class="character-name" id="character-name-display">Лавчик</div>
+        <div class="character-status" id="character-status">Счастлив и готов к приключениям! 😄</div>
+      </div>
+      
+      <div class="character-container">
+        <img id="character-img" src="images/1.png" alt="Персонаж" onerror="this.src='https://via.placeholder.com/300x300/4CAF50/white?text=🎮'">
+        <div class="needs-overlay">
+          <div>🍔 Еда: <span id="food">80</span>%</div>
+          <div>💤 Энергия: <span id="energy">60</span>%</div>
+          <div>🎮 Веселье: <span id="fun">40</span>%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Экран заданий -->
+    <div id="screen-tasks" class="screen">
+      <h2>Задания</h2>
+      <ul id="task-list"></ul>
+    </div>
+
+    <!-- Экран магазина -->
+    <div id="screen-shop" class="screen">
+      <h2>Магазин</h2>
+      <div class="shop">
+        <div>👕 Футболка — 10 лавок</div>
+        <button onclick="buyItem('Футболка',10)">Купить</button>
+      </div>
+      <div class="shop">
+        <div>🎁 Кружка — 50 лавок</div>
+        <button onclick="buyItem('Кружка',50)">Купить</button>
+      </div>
+    </div>
+
+    <!-- Экран настроек -->
+    <div id="screen-settings" class="screen">
+      <h2>⚙️ Настройки</h2>
+      
+      <div class="settings-container">
+        <!-- Секция имени персонажа -->
+        <div class="settings-section">
+          <h3>👤 Имя персонажа</h3>
+          <div class="setting-item">
+            <label for="char-name">Как зовут вашего персонажа?</label>
+            <input 
+              type="text" 
+              id="char-name" 
+              class="setting-input" 
+              placeholder="Введите имя..."
+              maxlength="20"
+            >
+          </div>
+          <button class="setting-btn" onclick="saveSettings()">
+            💾 Сохранить имя
+          </button>
+        </div>
+
+        <!-- Секция выбора персонажа -->
+        <div class="settings-section">
+          <h3>🎭 Внешность персонажа</h3>
+          <div class="setting-item">
+            <label>Выберите внешность:</label>
+            <div class="character-select-grid" id="character-selector">
+              <div class="character-option" data-img="images/1.png">
+                <img src="images/1.png" alt="Персонаж 1" onerror="this.src='https://via.placeholder.com/100x100/4CAF50/white?text=1'">
+                <div class="character-checkmark">✓</div>
+              </div>
+              <div class="character-option" data-img="images/2.png">
+                <img src="images/2.png" alt="Персонаж 2" onerror="this.src='https://via.placeholder.com/100x100/2196F3/white?text=2'">
+                <div class="character-checkmark">✓</div>
+              </div>
+              <div class="character-option" data-img="images/3.png">
+                <img src="images/3.png" alt="Персонаж 3" onerror="this.src='https://via.placeholder.com/100x100/FF9800/white?text=3'">
+                <div class="character-checkmark">✓</div>
+              </div>
+              <div class="character-option" data-img="images/4.png">
+                <img src="images/4.png" alt="Персонаж 4" onerror="this.src='https://via.placeholder.com/100x100/9C27B0/white?text=4'">
+                <div class="character-checkmark">✓</div>
+              </div>
+              <div class="character-option" data-img="images/5.png">
+                <img src="images/5.png" alt="Персонаж 5" onerror="this.src='https://via.placeholder.com/100x100/607D8B/white?text=5'">
+                <div class="character-checkmark">✓</div>
+              </div>
+              <div class="character-option" data-img="images/6.png">
+                <img src="images/6.png" alt="Персонаж 6" onerror="this.src='https://via.placeholder.com/100x100/795548/white?text=6'">
+                <div class="character-checkmark">✓</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Секция информации -->
+        <div class="settings-section">
+          <h3>ℹ️ Информация</h3>
+          <div class="setting-item">
+            <div style="text-align: center; color: #666; font-size: 14px; line-height: 1.6;">
+              <p>💎 Лавок заработано: <strong id="total-lavki">0</strong></p>
+              <p>✅ Заданий выполнено: <strong id="completed-tasks">0 из 0</strong></p>
+              <p>📅 Персонаж создан: <strong id="creation-date">сегодня</strong></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Нижняя навигация -->
+  <div class="nav">
+    <button data-target="character">👤</button>
+    <button data-target="tasks">🧾</button>
+    <button data-target="shop">🏪</button>
+    <button data-target="settings">⚙️</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

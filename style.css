@@ -1,0 +1,904 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #f0f4f8;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  color: #333;
+  overflow: hidden;
+}
+
+.app {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  position: relative;
+  overflow-y: auto;
+  padding-bottom: 60px; /* Место для навигации */
+}
+
+.screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  width: 100%;
+  min-height: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.screen.active {
+  display: flex;
+}
+
+/* Заголовки */
+h2 {
+  margin: 10px 0 20px 0;
+  font-weight: 700;
+  color: #2c3e50;
+  font-size: 24px;
+}
+
+/* ===================== */
+/* 👤 ГЛАВНЫЙ ЭКРАН - КАРТИНКА ПОДНЯТА ВЫШЕ */
+/* ===================== */
+.character-header {
+  text-align: center;
+  margin-bottom: 2px;
+  width: 100%;
+  padding: 8px 10px 0 10px;
+  flex-shrink: 0;
+}
+
+.character-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: #2c3e50;
+  margin: 0 0 1px 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.character-status {
+  font-size: 14px;
+  color: #7f8c8d;
+  font-style: italic;
+  margin: 0;
+}
+
+.character-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.character-container img {
+  width: 100%;
+  max-width: 95vw;
+  height: auto;
+  max-height: 78vh;
+  object-fit: contain;
+  transition: transform 0.3s;
+  border-radius: 15px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.character-container img:hover {
+  transform: scale(1.02);
+}
+
+.needs-overlay {
+  position: relative;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 15px;
+  backdrop-filter: blur(10px);
+  margin: 5px 0 10px 0;
+  width: 90%;
+  max-width: 300px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.needs-overlay div {
+  margin: 6px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+}
+
+.needs-overlay span {
+  font-weight: 700;
+  color: #2c3e50;
+  font-size: 16px;
+}
+
+/* Переопределяем стили экрана для главного */
+#screen-character {
+  padding: 0;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+/* Для мобильных устройств */
+@media (max-width: 480px) {
+  .character-header {
+    margin-bottom: 1px;
+    padding: 5px 5px 0 5px;
+  }
+  
+  .character-name {
+    font-size: 20px;
+    margin: 0;
+  }
+  
+  .character-status {
+    font-size: 13px;
+  }
+  
+  .character-container img {
+    max-width: 98vw;
+    max-height: 73vh;
+    border-radius: 12px;
+  }
+  
+  .needs-overlay {
+    padding: 10px 12px;
+    margin: 3px 0 8px 0;
+    width: 85%;
+    max-width: 280px;
+  }
+  
+  .needs-overlay div {
+    margin: 5px 0;
+    font-size: 14px;
+  }
+  
+  .needs-overlay span {
+    font-size: 15px;
+  }
+  
+  #screen-character {
+    padding: 0;
+  }
+}
+
+/* Для очень маленьких экранов */
+@media (max-width: 360px) {
+  .character-header {
+    padding: 3px 5px 0 5px;
+  }
+  
+  .character-name {
+    font-size: 18px;
+  }
+  
+  .character-status {
+    font-size: 12px;
+  }
+  
+  .character-container img {
+    max-height: 68vh;
+  }
+  
+  .needs-overlay {
+    padding: 8px 10px;
+    margin: 2px 0 6px 0;
+    width: 80%;
+  }
+}
+
+/* ===================== */
+/* ⚙️ НАСТРОЙКИ */
+/* ===================== */
+.settings-container {
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  margin: 10px 0;
+  box-sizing: border-box;
+}
+
+.settings-section {
+  margin-bottom: 30px;
+  padding-bottom: 25px;
+  border-bottom: 2px solid #ecf0f1;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #34495e;
+  font-size: 14px;
+}
+
+.setting-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 12px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+  box-sizing: border-box;
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: #4caf50;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+}
+
+.setting-btn {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(135deg, #4caf50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 15px;
+}
+
+.setting-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.setting-btn:active {
+  transform: translateY(0);
+}
+
+.character-select-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.character-option {
+  cursor: pointer;
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 3px solid transparent;
+  position: relative;
+  background: #f8f9fa;
+}
+
+.character-option:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.character-option.selected {
+  border-color: #4caf50;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.character-option img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+}
+
+.character-checkmark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #4caf50;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.character-option.selected .character-checkmark {
+  opacity: 1;
+}
+
+/* ===================== */
+/* 📋 ЗАДАНИЯ */
+/* ===================== */
+#task-list {
+  list-style: none;
+  padding: 0;
+  width: 100%;
+  max-width: 400px;
+  margin: 0;
+}
+
+.task-item {
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  padding: 20px;
+  margin-bottom: 15px;
+  text-align: left;
+  position: relative;
+  border-left: 4px solid #3498db;
+}
+
+.task-item.completed {
+  border-left-color: #4caf50;
+  background: #f8fff8;
+}
+
+.task-item.pending {
+  border-left-color: #ff9800;
+  background: #fff3cd;
+}
+
+.task-item img {
+  width: 100%;
+  max-height: 200px;
+  border-radius: 10px;
+  margin-top: 10px;
+  object-fit: cover;
+}
+
+.task-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 15px;
+  gap: 10px;
+}
+
+.task-buttons button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.task-buttons .complete {
+  background: #2196f3;
+  color: white;
+}
+
+.task-buttons .complete:hover {
+  background: #1976d2;
+  transform: translateY(-1px);
+}
+
+.task-buttons .delete {
+  background: #f44336;
+  color: white;
+}
+
+.task-buttons .delete:hover {
+  background: #d32f2f;
+  transform: translateY(-1px);
+}
+
+/* ===================== */
+/* 🏪 МАГАЗИН */
+/* ===================== */
+.shop {
+  background: white;
+  padding: 20px;
+  margin: 15px 0;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 350px;
+  border-left: 4px solid #ff9800;
+}
+
+.shop button {
+  margin-top: 10px;
+  padding: 12px 20px;
+  border: none;
+  background: linear-gradient(135deg, #4caf50, #45a049);
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.shop button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+/* 💎 Счётчик лавок */
+.lavki-counter {
+  position: fixed;
+  top: 10px;
+  right: 15px;
+  background: rgba(255,255,255,0.85);
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-weight: bold;
+  font-size: 18px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  z-index: 100;
+}
+
+/* 📸 Стили для загрузки фото */
+.photo-upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.photo-preview {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 10px;
+  border: 2px solid #4caf50;
+  display: none;
+}
+
+.photo-preview.visible {
+  display: block;
+}
+
+.upload-btn {
+  background: #2196f3;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.upload-btn:hover {
+  background: #1976d2;
+}
+
+.upload-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* 📋 Список заданий улучшенный */
+.task-item {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  padding: 15px;
+  margin-bottom: 15px;
+  text-align: left;
+  position: relative;
+}
+
+.task-item img {
+  width: 100%;
+  max-height: 200px;
+  border-radius: 8px;
+  margin-top: 10px;
+  object-fit: cover;
+}
+
+.task-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.task-buttons button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.task-buttons .complete {
+  background: #2196f3;
+  color: white;
+}
+
+.task-buttons .complete:hover {
+  background: #1976d2;
+}
+
+.task-buttons .delete {
+  background: #f44336;
+  color: white;
+}
+
+.task-buttons .delete:hover {
+  background: #d32f2f;
+}
+
+/* 💃 Анимация персонажа при получении награды */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+}
+
+.bounce {
+  animation: bounce 0.8s ease;
+}
+
+/* 📱 Адаптивность для мобильных */
+@media (max-width: 480px) {
+  .task-item {
+    padding: 10px;
+  }
+  
+  .task-buttons button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .character-container img {
+    width: 85%;
+  }
+  
+  .settings-container {
+    padding: 15px;
+    margin: 5px;
+  }
+  
+  .character-select-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .character-option img {
+    height: 70px;
+  }
+}
+
+/* Стили для выполненных заданий */
+.task-item.completed {
+  background: #f8fff8;
+  border-left: 4px solid #4caf50;
+}
+
+.user-photo-label {
+  font-weight: bold;
+  color: #2e7d32;
+  margin: 10px 0 5px 0;
+  font-size: 14px;
+}
+
+/* Улучшенные стили для фото */
+.task-item img[alt="Ваше фото"] {
+  border: 2px solid #4caf50 !important;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+/* Стили для статуса выполнения */
+.task-completed-text {
+  color: #4caf50;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.task-pending-text {
+  color: #ff9800;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* ===================== */
+/* ⚙️ СТИЛИ НАСТРОЕК улучшенные */
+/* ===================== */
+.settings-container {
+  width: 90%;
+  max-width: 400px;
+  background: white;
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin: 10px 0;
+}
+
+.settings-section {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  color: #333;
+  margin-bottom: 15px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-item {
+  margin-bottom: 15px;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #555;
+}
+
+.setting-input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid #e1e5e9;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: #4caf50;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.setting-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #4caf50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+
+.setting-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.setting-btn:active {
+  transform: translateY(0);
+}
+
+.character-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.character-option img {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  display: block;
+}
+
+.character-checkmark {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #4caf50;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.character-option.selected .character-checkmark {
+  opacity: 1;
+}
+
+/* Стили для главного экрана с именем */
+.character-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.character-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin: 10px 0 5px 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.character-status {
+  font-size: 16px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Анимации */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-container {
+  animation: slideIn 0.5s ease;
+}
+
+/* Адаптивность */
+@media (max-width: 480px) {
+  .character-select-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .character-option img {
+    height: 80px;
+  }
+}
+
+/* ===================== */
+/* 📱 НАВИГАЦИЯ */
+/* ===================== */
+.nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: #ffffff;
+  border-top: 1px solid #ccc;
+  padding: 10px 0;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  z-index: 1000;
+}
+
+.nav button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+.nav button:hover {
+  transform: scale(1.2);
+}
+
+.nav button.active {
+  background: #e3f2fd;
+  border-radius: 50%;
+  transform: scale(1.1);
+}
+
+/* ===================== */
+/* 🔔 УВЕДОМЛЕНИЯ */
+/* ===================== */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes slideOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+}
+
+/* ===================== */
+/* 🎨 ОБЩИЕ СТИЛИ */
+/* ===================== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Улучшение скролла */
+.app {
+  scrollbar-width: thin;
+  scrollbar-color: #4caf50 #f0f4f8;
+}
+
+.app::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app::-webkit-scrollbar-track {
+  background: #f0f4f8;
+}
+
+.app::-webkit-scrollbar-thumb {
+  background: #4caf50;
+  border-radius: 3px;
+}
+
+/* Плавные переходы */
+.screen {
+  transition: opacity 0.3s ease;
+}
+
+/* Улучшение доступности */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
