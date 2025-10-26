@@ -235,14 +235,19 @@ async function approveSubmission(submissionId) {
 
 // Отклонение задания
 async function rejectSubmission(submissionId) {
+    const rejectionReason = prompt('Укажите причину отклонения (например: "Попробуй ещё раз", "Фото нечеткое", "Неправильное выполнение"):', 'Попробуй ещё раз');
+    
+    if (rejectionReason === null) return; // Пользователь отменил
+    
     if (!confirm('Отклонить это задание?')) return;
     
     try {
         await apiCall(`/api/admin/submissions/${submissionId}/reject`, {
-            method: 'POST'
+            method: 'POST',
+            body: JSON.stringify({ rejectionReason })
         });
         
-        showNotification('Задание отклонено.');
+        showNotification('Задание отклонено. Пользователь сможет отправить его снова.');
         loadSubmissions();
     } catch (error) {
         showNotification('Ошибка отклонения задания', 'error');
@@ -734,3 +739,4 @@ document.addEventListener('DOMContentLoaded', function() {
         loadDashboard();
     }
 });
+
