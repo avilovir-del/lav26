@@ -25,6 +25,10 @@ function showScreen(name) {
       setTimeout(() => {
         loadShopItems();
       }, 100);
+    } else if (name === 'settings') {
+      setTimeout(() => {
+        loadUserPurchases();
+      }, 100);
     }
     
     setTimeout(() => {
@@ -129,6 +133,39 @@ function getUserInfo() {
   };
 }
 
+// ДОБАВЛЕНО: Инициализация пользователя при входе
+async function initializeUser() {
+  try {
+    const userInfo = getUserInfo();
+    const response = await fetch(`${API_BASE}/api/initialize-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId: userInfo.id,
+        userName: userInfo.fullName,
+        userContact: userInfo.contact
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Пользователь инициализирован:', result);
+      
+      // Загружаем актуальный баланс с сервера
+      const balanceResponse = await fetch(`${API_BASE}/api/user/${userInfo.id}/balance`);
+      if (balanceResponse.ok) {
+        const balanceData = await balanceResponse.json();
+        lavki = balanceData.lavki;
+        updateLavki();
+      }
+    }
+  } catch (error) {
+    console.log('Ошибка инициализации пользователя:', error);
+  }
+}
+
 async function buyItem(itemName, cost, itemId) {
   if (lavki >= cost) {
     // Получаем данные пользователя из Telegram
@@ -173,6 +210,60 @@ async function buyItem(itemName, cost, itemId) {
 function refreshShop() {
   showNotification('🔄 Обновляем магазин...', 'info');
   loadShopItems();
+}
+
+// =====================
+// 🛒 БЛОК ПОКУПОК ПОЛЬЗОВАТЕЛЯ
+// =====================
+
+async function loadUserPurchases() {
+  try {
+    const userInfo = getUserInfo();
+    const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/purchases`);
+    
+    if (response.ok) {
+      const purchases = await response.json();
+      updatePurchasesDisplay(purchases);
+    }
+  } catch (error) {
+    console.log('Ошибка загрузки покупок:', error);
+    document.getElementById('user-purchases-list').innerHTML = `
+      <div style="text-align: center; color: #666; padding: 20px;">
+        ❌ Ошибка загрузки покупок
+      </div>
+    `;
+  }
+}
+
+function updatePurchasesDisplay(purchases) {
+  const purchasesContainer = document.getElementById('user-purchases-list');
+  if (!purchasesContainer) return;
+  
+  if (purchases.length === 0) {
+    purchasesContainer.innerHTML = `
+      <div style="text-align: center; color: #666; padding: 20px;">
+        🛒 Покупок пока нет
+        <br>
+        <small>Купите что-нибудь в магазине!</small>
+      </div>
+    `;
+    return;
+  }
+  
+  let purchasesHTML = '';
+  purchases.forEach(purchase => {
+    purchasesHTML += `
+      <div style="background: white; padding: 15px; margin: 10px 0; border-radius: 10px; border-left: 4px solid #4caf50;">
+        <div style="font-weight: bold; margin-bottom: 5px;">${purchase.itemName}</div>
+        <div style="color: #666; font-size: 14px;">
+          💎 ${purchase.price} лавок • 
+          📅 ${new Date(purchase.purchasedAt).toLocaleDateString('ru-RU')}
+        </div>
+      </div>
+    `;
+  });
+  
+  purchasesContainer.innerHTML = purchasesHTML;
 }
 
 // =====================
@@ -450,7 +541,6 @@ function renderTasks() {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'image/*';
-      fileInput.capture = 'environment';
       fileInput.style.display = 'none';
       fileInput.id = `file-input-${i}`;
       
@@ -865,6 +955,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeCharacterSelector();
   initializeDisplayValues();
   checkImages();
+  
+  // ДОБАВЛЕНО: Инициализация пользователя при загрузке
+  setTimeout(() => {
+    initializeUser();
+  }, 500);
   
   setTimeout(() => {
     updateLavki();
