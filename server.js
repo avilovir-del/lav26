@@ -65,6 +65,33 @@ function requireAuth(req, res, next) {
 // 📊 API ДЛЯ ПРИЛОЖЕНИЯ
 // ======================
 
+// ДОБАВЛЕНО: Инициализация пользователя при входе
+app.post('/api/initialize-user', (req, res) => {
+  const { userId, userName, userContact } = req.body;
+  
+  const data = loadData();
+  
+  // Создаем пользователя если его нет
+  if (!data.users[userId]) {
+    data.users[userId] = {
+      lavki: 0,
+      registrationDate: new Date().toISOString(),
+      completedTasks: 0,
+      lastActivity: new Date().toISOString(),
+      userName: userName || 'Аноним',
+      userContact: userContact || 'Не указан'
+    };
+    saveData(data);
+    console.log('Новый пользователь создан:', userId);
+  } else {
+    // Обновляем активность существующего пользователя
+    data.users[userId].lastActivity = new Date().toISOString();
+    saveData(data);
+  }
+  
+  res.json({ success: true, user: data.users[userId] });
+});
+
 // Получить активные задания
 app.get('/api/tasks', (req, res) => {
   const data = loadData();
@@ -99,9 +126,6 @@ app.post('/api/submit-task', (req, res) => {
     data.users[userId].userContact = userContact || data.users[userId].userContact;
   }
 
-  // УДАЛЕНО: Проверка на существующее отклоненное задание
-  // Теперь пользователь может отправлять задание повторно
-
   // Создаем submission
   const submission = {
     id: Date.now(),
@@ -114,7 +138,7 @@ app.post('/api/submit-task', (req, res) => {
     reward: task.reward,
     status: 'pending',
     submittedAt: new Date().toISOString(),
-    attempts: 1 // Добавляем счетчик попыток
+    attempts: 1
   };
 
   data.submissions.push(submission);
@@ -129,6 +153,18 @@ app.get('/api/user/:userId/balance', (req, res) => {
   const userId = req.params.userId;
   const user = data.users[userId] || { lavki: 0 };
   res.json({ lavki: user.lavki });
+});
+
+// ДОБАВЛЕНО: Получить покупки пользователя
+app.get('/api/user/:userId/purchases', (req, res) => {
+  const data = loadData();
+  const userId = req.params.userId;
+  const userPurchases = (data.purchases || []).filter(p => p.userId === userId);
+  
+  // Сортируем по дате (новые сверху)
+  userPurchases.sort((a, b) => new Date(b.purchasedAt) - new Date(a.purchasedAt));
+  
+  res.json(userPurchases);
 });
 
 // Получить товары магазина
@@ -146,6 +182,11 @@ app.get('/api/shop', (req, res) => {
 app.post('/api/buy-item', (req, res) => {
   const { itemId, itemName, price, userId, userName, userContact } = req.body;
   const data = loadData();
+  
+  // Проверяем баланс пользователя
+  if (!data.users[userId] || data.users[userId].lavki < price) {
+    return res.status(400).json({ error: 'Недостаточно лавок' });
+  }
   
   // Создаем заявку вместо прямой покупки
   if (!data.purchaseRequests) {
@@ -195,25 +236,25 @@ app.post('/api/admin/purchase-requests/:id/process', requireAuth, (req, res) => 
   request.processedAt = new Date().toISOString();
   request.adminNotes = adminNotes;
   
-  // Если подтверждено, списываем лавки
+  // Если подтверждено, списываем лавки и создаем покупку
   if (status === 'approved' && data.users[request.userId]) {
     if (data.users[request.userId].lavki >= request.price) {
       data.users[request.userId].lavki -= request.price;
+      
+      // Сохраняем историю покупок
+      if (!data.purchases) {
+        data.purchases = [];
+      }
+      data.purchases.push({
+        id: Date.now(),
+        itemId: request.itemId,
+        itemName: request.itemName,
+        price: request.price,
+        userId: request.userId,
+        userName: request.userName,
+        purchasedAt: new Date().toISOString()
+      });
     }
-    
-    // Сохраняем историю покупок
-    if (!data.purchases) {
-      data.purchases = [];
-    }
-    data.purchases.push({
-      id: Date.now(),
-      itemId: request.itemId,
-      itemName: request.itemName,
-      price: request.price,
-      userId: request.userId,
-      userName: request.userName,
-      purchasedAt: new Date().toISOString()
-    });
   }
   
   saveData(data);
@@ -249,7 +290,7 @@ app.get('/api/user/:userId/approved-tasks', (req, res) => {
   res.json(newApprovedTasks);
 });
 
-// ДОБАВЛЕНО: Получить отклоненные задания для пользователя
+// Получить отклоненные задания для пользователя
 app.get('/api/user/:userId/rejected-tasks', (req, res) => {
   const userId = req.params.userId;
   const data = loadData();
@@ -337,13 +378,45 @@ app.put('/api/admin/users/:userId/balance', requireAuth, (req, res) => {
   const data = loadData();
   
   if (!data.users[userId]) {
-    data.users[userId] = { lavki: 0 };
+    return res.status(404).json({ error: 'Пользователь не найден' });
   }
   
   data.users[userId].lavki = parseInt(lavki);
   saveData(data);
   
   res.json({ success: true, message: 'Баланс обновлен' });
+});
+
+// ДОБАВЛЕНО: Сброс персонажа пользователя
+app.post('/api/admin/users/:userId/reset', requireAuth, (req, res) => {
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  if (!data.users[userId]) {
+    return res.status(404).json({ error: 'Пользователь не найден' });
+  }
+  
+  // Сбрасываем данные пользователя
+  data.users[userId].lavki = 0;
+  data.users[userId].completedTasks = 0;
+  data.users[userId].lastActivity = new Date().toISOString();
+  
+  // Удаляем все submissions пользователя
+  data.submissions = data.submissions.filter(s => s.userId !== userId);
+  
+  // Удаляем покупки пользователя
+  if (data.purchases) {
+    data.purchases = data.purchases.filter(p => p.userId !== userId);
+  }
+  
+  // Удаляем заявки на покупку пользователя
+  if (data.purchaseRequests) {
+    data.purchaseRequests = data.purchaseRequests.filter(r => r.userId !== userId);
+  }
+  
+  saveData(data);
+  
+  res.json({ success: true, message: 'Персонаж пользователя сброшен' });
 });
 
 // ======================
@@ -425,7 +498,7 @@ app.post('/api/admin/submissions/:id/reject', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Submission не найден' });
   }
   
-  // ДОБАВЛЕНО: Запрашиваем причину отклонения
+  // Запрашиваем причину отклонения
   const { rejectionReason } = req.body;
   
   submission.status = 'rejected';
