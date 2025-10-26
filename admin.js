@@ -93,6 +93,9 @@ function showSection(sectionName) {
         case 'submissions':
             loadSubmissions();
             break;
+        case 'purchases': // ДОБАВЛЕНО: загрузка заявок на покупку
+            loadPurchaseRequests();
+            break;
         case 'users':
             loadUsers();
             break;
@@ -143,6 +146,10 @@ async function loadDashboard() {
                 <div class="stat-number">${stats.activeTasks}</div>
                 <div class="stat-label">📋 Активных заданий</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-number">${stats.pendingPurchaseRequests}</div>
+                <div class="stat-label">🛒 Ожидают покупки</div>
+            </div>
         `;
         
         document.getElementById('stats-grid').innerHTML = statsHTML;
@@ -176,6 +183,9 @@ async function loadSubmissions() {
                         <div>
                             <div class="submission-user">👤 ${submission.userName}</div>
                             <div class="submission-task">📋 ${submission.taskName}</div>
+                            <div style="margin-top: 5px; color: #7f8c8d; font-size: 12px;">
+                                Контакт: ${submission.userContact}
+                            </div>
                         </div>
                         <div>
                             <span class="status-badge status-pending">⏳ Ожидает</span>
@@ -239,6 +249,109 @@ async function rejectSubmission(submissionId) {
     }
 }
 
+// ДОБАВЛЕНО: Загрузка заявок на покупку
+async function loadPurchaseRequests() {
+    try {
+        const requests = await apiCall('/api/admin/purchase-requests');
+        
+        // Обновляем статистику
+        document.getElementById('total-purchases').textContent = requests.length;
+        document.getElementById('pending-purchases').textContent = requests.filter(r => r.status === 'pending').length;
+        document.getElementById('approved-purchases').textContent = requests.filter(r => r.status === 'approved').length;
+        
+        if (requests.length === 0) {
+            document.getElementById('purchase-requests-list').innerHTML = `
+                <div class="empty-state">
+                    <div>🛒</div>
+                    <h3>Заявок на покупку нет</h3>
+                    <p>Пользователи еще не отправляли заявки на покупку товаров</p>
+                </div>
+            `;
+            return;
+        }
+
+        let requestsHTML = '';
+        requests.forEach(request => {
+            const statusBadge = request.status === 'pending' ? 
+                '<span class="status-badge status-pending">⏳ Ожидает</span>' :
+                request.status === 'approved' ? 
+                '<span class="status-badge status-approved">✅ Подтверждено</span>' :
+                '<span class="status-badge status-rejected">❌ Отклонено</span>';
+            
+            requestsHTML += `
+                <div class="submission-item">
+                    <div class="submission-header">
+                        <div>
+                            <div class="submission-user">👤 ${request.userName}</div>
+                            <div class="submission-task">🛒 ${request.itemName}</div>
+                            <div style="margin-top: 5px; color: #7f8c8d; font-size: 14px;">
+                                💎 Цена: ${request.price} лавок • 
+                                📅 ${new Date(request.requestedAt).toLocaleDateString('ru-RU')}
+                            </div>
+                            ${request.adminNotes ? `
+                                <div style="margin-top: 5px; color: #666; font-size: 13px;">
+                                    <strong>Заметки:</strong> ${request.adminNotes}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div>
+                            ${statusBadge}
+                            <div style="margin-top: 5px; color: #7f8c8d; font-size: 12px;">
+                                Контакт: ${request.userContact}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${request.status === 'pending' ? `
+                        <div class="submission-actions">
+                            <button onclick="processPurchaseRequest(${request.id}, 'approved')" class="btn btn-approve">
+                                ✅ Подтвердить покупку
+                            </button>
+                            <button onclick="processPurchaseRequest(${request.id}, 'rejected')" class="btn btn-reject">
+                                ❌ Отклонить заявку
+                            </button>
+                        </div>
+                    ` : `
+                        <div style="color: #7f8c8d; font-size: 14px; margin-top: 10px;">
+                            Обработано: ${request.processedAt ? new Date(request.processedAt).toLocaleDateString('ru-RU') : 'Неизвестно'}
+                        </div>
+                    `}
+                </div>
+            `;
+        });
+        
+        document.getElementById('purchase-requests-list').innerHTML = requestsHTML;
+    } catch (error) {
+        document.getElementById('purchase-requests-list').innerHTML = '<div class="empty-state">Ошибка загрузки заявок</div>';
+    }
+}
+
+// ДОБАВЛЕНО: Обработка заявки на покупку
+async function processPurchaseRequest(requestId, status) {
+    const action = status === 'approved' ? 'подтвердить' : 'отклонить';
+    
+    if (!confirm(`Вы уверены, что хотите ${action} эту заявку на покупку?`)) return;
+    
+    const adminNotes = status === 'rejected' ? 
+        prompt('Укажите причину отклонения (необязательно):') : null;
+    
+    try {
+        await apiCall(`/api/admin/purchase-requests/${requestId}/process`, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                status: status,
+                adminNotes: adminNotes
+            })
+        });
+        
+        showNotification(`Заявка ${status === 'approved' ? 'подтверждена' : 'отклонена'}!`);
+        loadPurchaseRequests();
+        loadDashboard();
+    } catch (error) {
+        showNotification('Ошибка обработки заявки', 'error');
+    }
+}
+
 // Загрузка списка пользователей
 async function loadUsers() {
     try {
@@ -272,16 +385,19 @@ async function loadUsers() {
             const isActive = user.lastActivity && (new Date(user.lastActivity) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
             
             usersHTML += `
-                <div class="submission-item user-item" data-user-id="${user.id}" data-user-name="${user.id}">
+                <div class="submission-item user-item" data-user-id="${user.id}" data-user-name="${user.userName}">
                     <div class="submission-header">
                         <div>
-                            <div class="submission-user">👤 ID: ${user.id}</div>
+                            <div class="submission-user">👤 ${user.userName}</div>
                             <div style="display: flex; gap: 15px; margin-top: 5px; font-size: 14px;">
                                 <span>💎 ${user.lavki} лавок</span>
                                 <span>✅ ${user.completedTasks || 0} заданий</span>
                                 <span class="status-badge ${isActive ? 'status-approved' : 'status-rejected'}">
                                     ${isActive ? '🟢 Активен' : '⚫ Неактивен'}
                                 </span>
+                            </div>
+                            <div style="color: #7f8c8d; font-size: 12px; margin-top: 5px;">
+                                Контакт: ${user.userContact}
                             </div>
                         </div>
                         <div style="text-align: right;">
@@ -342,23 +458,40 @@ async function viewUserDetails(userId) {
             </div>
         `).join('');
         
+        const purchasesHTML = userInfo.purchases.map(purchase => `
+            <div style="border: 1px solid #eee; padding: 10px; margin: 5px 0; border-radius: 5px;">
+                <div><strong>${purchase.itemName}</strong> (${purchase.price} лавок)</div>
+                <div style="font-size: 12px; color: #666;">
+                    📅 ${new Date(purchase.purchasedAt).toLocaleDateString('ru-RU')}
+                </div>
+            </div>
+        `).join('');
+        
         const modalHTML = `
             <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 10000;">
                 <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
                     <h3>📊 Детали пользователя</h3>
                     <div style="margin: 20px 0;">
                         <p><strong>ID:</strong> ${userInfo.id}</p>
+                        <p><strong>Имя:</strong> ${userInfo.userName}</p>
+                        <p><strong>Контакт:</strong> ${userInfo.userContact}</p>
                         <p><strong>💎 Баланс:</strong> ${userInfo.lavki} лавок</p>
                         <p><strong>✅ Выполнено заданий:</strong> ${userInfo.completedTasks}</p>
                         <p><strong>📅 Дата регистрации:</strong> ${userInfo.registrationDate ? new Date(userInfo.registrationDate).toLocaleDateString('ru-RU') : 'Неизвестно'}</p>
                         <p><strong>📊 Всего отправок:</strong> ${userInfo.totalSubmissions}</p>
                         <p><strong>✅ Подтверждено:</strong> ${userInfo.approvedSubmissions}</p>
                         <p><strong>⏳ Ожидает:</strong> ${userInfo.pendingSubmissions}</p>
+                        <p><strong>🛒 Покупок:</strong> ${userInfo.totalPurchases}</p>
                     </div>
                     
                     <h4>📋 История заданий:</h4>
-                    <div style="max-height: 200px; overflow-y: auto;">
+                    <div style="max-height: 200px; overflow-y: auto; margin-bottom: 20px;">
                         ${submissionsHTML || '<p>Заданий пока нет</p>'}
+                    </div>
+                    
+                    <h4>🛒 История покупок:</h4>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${purchasesHTML || '<p>Покупок пока нет</p>'}
                     </div>
                     
                     <div style="margin-top: 20px; text-align: center;">
