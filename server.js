@@ -99,6 +99,9 @@ app.post('/api/submit-task', (req, res) => {
     data.users[userId].userContact = userContact || data.users[userId].userContact;
   }
 
+  // УДАЛЕНО: Проверка на существующее отклоненное задание
+  // Теперь пользователь может отправлять задание повторно
+
   // Создаем submission
   const submission = {
     id: Date.now(),
@@ -110,7 +113,8 @@ app.post('/api/submit-task', (req, res) => {
     photo,
     reward: task.reward,
     status: 'pending',
-    submittedAt: new Date().toISOString()
+    submittedAt: new Date().toISOString(),
+    attempts: 1 // Добавляем счетчик попыток
   };
 
   data.submissions.push(submission);
@@ -245,6 +249,31 @@ app.get('/api/user/:userId/approved-tasks', (req, res) => {
   res.json(newApprovedTasks);
 });
 
+// ДОБАВЛЕНО: Получить отклоненные задания для пользователя
+app.get('/api/user/:userId/rejected-tasks', (req, res) => {
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  // Находим все отклоненные задания пользователя
+  const rejectedSubmissions = data.submissions.filter(
+    s => s.userId === userId && s.status === 'rejected' && !s.userNotified
+  );
+  
+  // Отмечаем их как уведомленные и возвращаем
+  const rejectedTasks = [];
+  rejectedSubmissions.forEach(submission => {
+    rejectedTasks.push({
+      taskId: submission.taskId,
+      taskName: submission.taskName,
+      rejectionReason: submission.rejectionReason || 'Попробуйте ещё раз'
+    });
+    submission.userNotified = true; // Помечаем как уведомленное
+  });
+  
+  saveData(data);
+  res.json(rejectedTasks);
+});
+
 // ======================
 // 👥 API ДЛЯ ПОЛЬЗОВАТЕЛЕЙ
 // ======================
@@ -291,6 +320,7 @@ app.get('/api/admin/users/:userId', requireAuth, (req, res) => {
     totalSubmissions: userSubmissions.length,
     approvedSubmissions: userSubmissions.filter(s => s.status === 'approved').length,
     pendingSubmissions: userSubmissions.filter(s => s.status === 'pending').length,
+    rejectedSubmissions: userSubmissions.filter(s => s.status === 'rejected').length,
     totalPurchases: userPurchases.length,
     totalRequests: userRequests.length,
     submissions: userSubmissions,
@@ -395,8 +425,13 @@ app.post('/api/admin/submissions/:id/reject', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Submission не найден' });
   }
   
+  // ДОБАВЛЕНО: Запрашиваем причину отклонения
+  const { rejectionReason } = req.body;
+  
   submission.status = 'rejected';
   submission.reviewedAt = new Date().toISOString();
+  submission.rejectionReason = rejectionReason || 'Попробуйте ещё раз';
+  submission.userNotified = false; // Помечаем, что пользователь еще не уведомлен
   
   saveData(data);
   res.json({ success: true, message: 'Задание отклонено' });
@@ -510,6 +545,7 @@ app.get('/api/admin/stats', requireAuth, (req, res) => {
     activeUsers: activeUsers.length,
     totalSubmissions: data.submissions.length,
     pendingSubmissions: data.submissions.filter(s => s.status === 'pending').length,
+    rejectedSubmissions: data.submissions.filter(s => s.status === 'rejected').length,
     totalLavki: users.reduce((sum, user) => sum + (user.lavki || 0), 0),
     activeTasks: data.tasks.filter(t => t.active).length,
     activeShopItems: data.shop.filter(i => i.active).length,
