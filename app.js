@@ -24,18 +24,7 @@ async function saveFullUserState() {
         charName: localStorage.getItem('charName') || 'Лавчик',
         characterImg: localStorage.getItem('characterImg') || 'images/1.png'
       },
-      tasksProgress: tasks.map(task => ({
-        id: task.id,
-        completed: task.completed,
-        userPhoto: task.userPhoto,
-        pendingApproval: task.pendingApproval,
-        wasRejected: task.wasRejected
-      })),
-      lastSave: new Date().toISOString(),
-      stats: {
-        completedTasksCount: tasks.filter(t => t.completed).length,
-        totalTasks: tasks.length
-      }
+      lastSave: new Date().toISOString()
     };
     
     const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/state`, {
@@ -47,10 +36,10 @@ async function saveFullUserState() {
     });
 
     if (response.ok) {
-      console.log('Полное состояние сохранено на сервер');
+      console.log('💾 Полное состояние сохранено на сервер');
     }
   } catch (error) {
-    console.log('Ошибка сохранения полного состояния:', error);
+    console.log('❌ Ошибка сохранения полного состояния:', error);
   }
 }
 
@@ -76,37 +65,17 @@ async function loadFullUserState() {
         }
       }
       
-      // Восстанавливаем прогресс заданий
-      if (userData.gameState && userData.gameState.tasksProgress) {
-        restoreTasksProgress(userData.gameState.tasksProgress);
-      }
-      
       updateLavki();
       updateCharacterDisplay();
-      renderTasks();
       
-      console.log('Полное состояние загружено с сервера:', userData);
+      console.log('🔄 Полное состояние загружено с сервера');
       return true;
     }
   } catch (error) {
-    console.log('Ошибка загрузки полного состояния:', error);
+    console.log('❌ Ошибка загрузки полного состояния:', error);
   }
   
   return false;
-}
-
-// Восстановить прогресс заданий
-function restoreTasksProgress(tasksProgress) {
-  tasksProgress.forEach(progress => {
-    const taskIndex = tasks.findIndex(t => t.id === progress.id);
-    if (taskIndex !== -1) {
-      tasks[taskIndex].completed = progress.completed || false;
-      tasks[taskIndex].userPhoto = progress.userPhoto || null;
-      tasks[taskIndex].pendingApproval = progress.pendingApproval || false;
-      tasks[taskIndex].wasRejected = progress.wasRejected || false;
-    }
-  });
-  saveTasksToStorage();
 }
 
 // Функция для загрузки данных пользователя
@@ -130,10 +99,10 @@ async function loadUserData() {
             
             updateLavki();
             updateCharacterDisplay();
-            console.log('Данные пользователя загружены с сервера:', userData);
+            console.log('👤 Данные пользователя загружены с сервера');
         }
     } catch (error) {
-        console.log('Ошибка загрузки данных пользователя, используем локальные данные:', error);
+        console.log('❌ Ошибка загрузки данных пользователя, используем локальные данные:', error);
         // Fallback: загружаем из localStorage
         lavki = parseInt(localStorage.getItem('lavki')) || 0;
         updateLavki();
@@ -156,9 +125,9 @@ function showScreen(name) {
       setTimeout(liftCharacterImage, 50);
     } else if (name === 'tasks') {
       // ПРОВЕРЯЕМ при открытии экрана заданий
-      setTimeout(checkApprovedTasks, 1000);
-      setTimeout(checkRejectedTasks, 1000);
-      setTimeout(loadTasksFromServer, 1000); // ДОБАВЛЕНО: загружаем актуальные задания
+      setTimeout(checkApprovedTasks, 500);
+      setTimeout(checkRejectedTasks, 500);
+      setTimeout(loadTasksFromServer, 500);
     } else if (name === 'shop') {
       setTimeout(() => {
         loadShopItems();
@@ -190,7 +159,7 @@ function updateLavki() {
   
   // Автоматически сохраняем полное состояние при изменении лавок
   saveFullUserState().catch(error => {
-    console.log('Ошибка автосохранения:', error);
+    console.log('❌ Ошибка автосохранения:', error);
   });
   
   // Сохраняем локально как fallback
@@ -210,7 +179,7 @@ async function loadShopItems() {
       localStorage.setItem('shopItems', JSON.stringify(shopItems));
     }
   } catch (error) {
-    console.log('Не удалось загрузить товары, используем локальные:', error);
+    console.log('❌ Не удалось загрузить товары, используем локальные:', error);
     const savedItems = localStorage.getItem('shopItems');
     if (savedItems) {
       updateShopDisplay(JSON.parse(savedItems));
@@ -277,7 +246,7 @@ function getUserInfo() {
   };
 }
 
-// ДОБАВЛЕНО: Инициализация пользователя при входе
+// Инициализация пользователя при входе
 async function initializeUser() {
   try {
     const userInfo = getUserInfo();
@@ -295,7 +264,7 @@ async function initializeUser() {
 
     if (response.ok) {
       const result = await response.json();
-      console.log('Пользователь инициализирован:', result);
+      console.log('👤 Пользователь инициализирован');
       
       // Загружаем актуальный баланс с сервера
       const balanceResponse = await fetch(`${API_BASE}/api/user/${userInfo.id}/balance`);
@@ -306,13 +275,12 @@ async function initializeUser() {
       }
     }
   } catch (error) {
-    console.log('Ошибка инициализации пользователя:', error);
+    console.log('❌ Ошибка инициализации пользователя:', error);
   }
 }
 
 async function buyItem(itemName, cost, itemId) {
   if (lavki >= cost) {
-    // Получаем данные пользователя из Telegram
     const userInfo = getUserInfo();
     
     if (confirm(`Отправить заявку на покупку "${itemName}" за ${cost} лавок?`)) {
@@ -331,16 +299,14 @@ async function buyItem(itemName, cost, itemId) {
         });
 
         if (response.ok) {
-          // Резервируем лавки локально
           lavki -= cost;
-          updateLavki(); // Автосохранение сработает здесь
+          updateLavki();
           
           showNotification(`✅ Заявка на покупку "${itemName}" отправлена! Ожидайте подтверждения.`, 'success');
         } else {
           throw new Error('Ошибка сервера');
         }
       } catch (error) {
-        // Возвращаем лавки при ошибке
         lavki += cost;
         updateLavki();
         showNotification('❌ Ошибка отправки заявки', 'error');
@@ -370,7 +336,7 @@ async function loadUserPurchases() {
       updatePurchasesDisplay(purchases);
     }
   } catch (error) {
-    console.log('Ошибка загрузки покупок:', error);
+    console.log('❌ Ошибка загрузки покупок:', error);
     document.getElementById('user-purchases-list').innerHTML = `
       <div style="text-align: center; color: #666; padding: 20px;">
         ❌ Ошибка загрузки покупок
@@ -445,15 +411,14 @@ async function saveSettings() {
     });
 
     if (response.ok) {
-      localStorage.setItem('charName', name); // Сохраняем локально для быстрого доступа
+      localStorage.setItem('charName', name);
       updateCharacterDisplay();
       showSuccessMessage('Имя персонажа сохранено на сервере! 🎉');
     } else {
       throw new Error('Ошибка сервера');
     }
   } catch (error) {
-    console.log('Ошибка сохранения настроек, сохраняем локально:', error);
-    // Fallback: сохраняем локально
+    console.log('❌ Ошибка сохранения настроек, сохраняем локально:', error);
     localStorage.setItem('charName', name);
     updateCharacterDisplay();
     showSuccessMessage('Имя персонажа сохранено (оффлайн режим)! 🎉');
@@ -534,7 +499,7 @@ async function changeCharacter(imgPath) {
         throw new Error('Ошибка сервера');
       }
     } catch (error) {
-      console.log('Ошибка сохранения внешности, сохраняем локально:', error);
+      console.log('❌ Ошибка сохранения внешности, сохраняем локально:', error);
     }
     
     localStorage.setItem('characterImg', imgPath);
@@ -569,7 +534,7 @@ function updateStats() {
   }
   
   if (completedTasks) {
-    const completedCount = tasks.filter(task => task.completed).length;
+    const completedCount = tasks.filter(task => task.userCompleted).length;
     completedTasks.textContent = `${completedCount} из ${tasks.length}`;
   }
   
@@ -612,105 +577,54 @@ function showSuccessMessage(message) {
 }
 
 // =====================
-// 📋 СИСТЕМА ЗАДАНИЙ
+// 📋 ОПТИМИЗИРОВАННАЯ СИСТЕМА ЗАДАНИЙ
 // =====================
 
 let tasks = [];
 
-// ДОБАВЛЕНО: Загрузка заданий с сервера
+// Загрузка заданий с сервера с информацией о выполнении
 async function loadTasksFromServer() {
   try {
-    const response = await fetch(`${API_BASE}/api/tasks`);
+    const userInfo = getUserInfo();
+    const response = await fetch(`${API_BASE}/api/tasks/${userInfo.id}`);
+    
     if (response.ok) {
       const serverTasks = await response.json();
-      
-      // Сохраняем прогресс текущих заданий
-      const currentProgress = tasks.reduce((acc, task) => {
-        acc[task.id] = {
-          completed: task.completed,
-          userPhoto: task.userPhoto,
-          pendingApproval: task.pendingApproval,
-          wasRejected: task.wasRejected
-        };
-        return acc;
-      }, {});
-      
-      // Обновляем задания с сохранением прогресса
-      tasks = serverTasks.map(serverTask => {
-        const progress = currentProgress[serverTask.id];
-        if (progress) {
-          return {
-            ...serverTask,
-            completed: progress.completed,
-            userPhoto: progress.userPhoto,
-            pendingApproval: progress.pendingApproval,
-            wasRejected: progress.wasRejected
-          };
-        }
-        return { 
-          ...serverTask, 
-          completed: false, 
-          userPhoto: null, 
-          pendingApproval: false, 
-          wasRejected: false 
-        };
-      });
-      
-      saveTasksToStorage();
+      tasks = serverTasks;
       renderTasks();
-      console.log('Задания синхронизированы с сервером:', tasks);
+      console.log('📋 Задания синхронизированы с сервером');
     }
   } catch (error) {
-    console.log('Ошибка загрузки заданий с сервера:', error);
+    console.log('❌ Ошибка загрузки заданий с сервера:', error);
+    // Используем локальные данные как fallback
+    const savedTasks = localStorage.getItem('tasks');
+    if (savedTasks) {
+      try {
+        tasks = JSON.parse(savedTasks);
+        renderTasks();
+      } catch (e) {
+        console.error('❌ Ошибка загрузки локальных заданий:', e);
+      }
+    }
   }
 }
 
 function initializeTasks() {
-  const savedTasks = localStorage.getItem('tasks');
-  
-  if (savedTasks) {
-    try {
-      const parsedTasks = JSON.parse(savedTasks);
-      tasks = parsedTasks;
-      console.log('Задания загружены из localStorage:', tasks);
-    } catch (e) {
-      console.error('Ошибка загрузки заданий:', e);
-      // Если ошибка, загружаем с сервера
-      loadTasksFromServer();
-    }
-  } else {
-    // Если нет локальных заданий, загружаем с сервера
-    loadTasksFromServer();
-  }
+  // Сразу загружаем с сервера
+  loadTasksFromServer();
 }
 
-function saveTasksToStorage() {
-  try {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-    console.log('Задания сохранены локально:', tasks);
-    
-    // Автоматически сохраняем прогресс на сервер
-    saveFullUserState().catch(error => {
-      console.log('Ошибка сохранения прогресса заданий:', error);
-    });
-  } catch (e) {
-    console.error('Ошибка сохранения заданий:', e);
-  }
-}
-
-// =====================
-// РЕНДЕР ЗАДАНИЙ
-// =====================
+// Оптимизированный рендер заданий
 function renderTasks() {
   const list = document.getElementById('task-list');
   if (!list) {
-    console.error('Элемент task-list не найден');
+    console.error('❌ Элемент task-list не найден');
     return;
   }
 
+  // Быстрая очистка
   list.innerHTML = '';
 
-  // Показываем только активные задания
   const activeTasks = tasks.filter(task => task.active);
   
   if (activeTasks.length === 0) {
@@ -724,71 +638,48 @@ function renderTasks() {
     return;
   }
 
-  activeTasks.forEach((task, i) => {
+  // Используем DocumentFragment для быстрого добавления
+  const fragment = document.createDocumentFragment();
+
+  activeTasks.forEach((task) => {
     const li = document.createElement('li');
     li.className = 'task-item';
     
-    if (task.completed) {
+    // Устанавливаем стили в зависимости от статуса
+    if (task.userCompleted) {
       li.style.background = '#f8fff8';
       li.style.borderLeft = '4px solid #4caf50';
     } else if (task.pendingApproval) {
       li.style.background = '#fff3cd';
       li.style.borderLeft = '4px solid #ff9800';
-    } else if (task.wasRejected) {
-      li.style.background = '#ffeaa7';
-      li.style.borderLeft = '4px solid #e17055';
+    } else {
+      li.style.background = 'white';
+      li.style.borderLeft = '4px solid #3498db';
     }
 
     const divName = document.createElement('div');
     divName.style.fontWeight = 'bold';
     divName.style.marginBottom = '10px';
     
-    if (task.completed) {
+    if (task.userCompleted) {
       divName.innerHTML = `✅ <s>${task.name}</s>`;
     } else if (task.pendingApproval) {
       divName.innerHTML = `⏳ ${task.name} (на проверке)`;
-    } else if (task.wasRejected) {
-      divName.innerHTML = `🔄 ${task.name} (можно отправить снова)`;
     } else {
       divName.innerHTML = `📝 ${task.name}`;
     }
     
     li.appendChild(divName);
 
-    if (task.completed && task.userPhoto) {
-      const userImgContainer = document.createElement('div');
-      userImgContainer.style.marginTop = '10px';
-      
-      const userLabel = document.createElement('div');
-      userLabel.textContent = '📸 Ваше фото:';
-      userLabel.style.fontWeight = 'bold';
-      userLabel.style.marginBottom = '5px';
-      userLabel.style.color = '#2e7d32';
-      userImgContainer.appendChild(userLabel);
-      
-      const userImg = document.createElement('img');
-      userImg.src = task.userPhoto;
-      userImg.alt = "Ваше фото";
-      userImg.style.width = '100%';
-      userImg.style.maxHeight = '200px';
-      userImg.style.borderRadius = '8px';
-      userImg.style.border = '2px solid #4caf50';
-      userImg.style.objectFit = 'cover';
-      userImg.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.3)';
-      userImgContainer.appendChild(userImg);
-      
-      li.appendChild(userImgContainer);
-    }
-
     const btnContainer = document.createElement('div');
     btnContainer.className = 'task-buttons';
 
-    if (!task.completed && !task.pendingApproval) {
+    if (!task.userCompleted && !task.pendingApproval && task.canSubmit) {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'image/*';
       fileInput.style.display = 'none';
-      fileInput.id = `file-input-${i}`;
+      fileInput.id = `file-input-${task.id}`;
       
       fileInput.addEventListener('change', function(e) {
         handleImageUpload(e, task.id);
@@ -796,16 +687,9 @@ function renderTasks() {
 
       const uploadBtn = document.createElement('button');
       uploadBtn.className = 'complete';
-      
-      if (task.wasRejected) {
-        uploadBtn.textContent = `🔄 Отправить снова (+${task.reward} лавок)`;
-        uploadBtn.style.background = '#e17055';
-      } else {
-        uploadBtn.textContent = `Прикрепить фото (+${task.reward} лавок)`;
-      }
+      uploadBtn.textContent = `Прикрепить фото (+${task.reward} лавок)`;
       
       uploadBtn.onclick = () => {
-        console.log('Клик по кнопке загрузки для задания:', task.id);
         fileInput.click();
       };
 
@@ -817,27 +701,30 @@ function renderTasks() {
       pendingText.style.color = '#ff9800';
       pendingText.style.fontWeight = 'bold';
       btnContainer.appendChild(pendingText);
-    } else {
+    } else if (task.userCompleted) {
       const completedText = document.createElement('span');
       completedText.textContent = '✅ Выполнено';
       completedText.style.color = '#4caf50';
       completedText.style.fontWeight = 'bold';
       btnContainer.appendChild(completedText);
+    } else {
+      const cannotSubmitText = document.createElement('span');
+      cannotSubmitText.textContent = '❌ Недоступно';
+      cannotSubmitText.style.color = '#f44336';
+      cannotSubmitText.style.fontWeight = 'bold';
+      btnContainer.appendChild(cannotSubmitText);
     }
 
     li.appendChild(btnContainer);
-    list.appendChild(li);
+    fragment.appendChild(li);
   });
   
+  list.appendChild(fragment);
   updateStats();
-  console.log('Задания отрендерены:', activeTasks);
 }
 
-// =====================
-// ОБРАБОТКА ЗАГРУЗКИ ФОТО
-// =====================
+// Обработка загрузки фото
 function handleImageUpload(event, taskId) {
-  console.log('Загрузка фото для задания ID:', taskId);
   const file = event.target.files[0];
   if (!file) {
     console.log('Файл не выбран');
@@ -858,33 +745,21 @@ function handleImageUpload(event, taskId) {
   
   reader.onload = function(e) {
     const imageDataUrl = e.target.result;
-    console.log('Фото загружено, данные URL получены');
-    
     completeTaskWithPhoto(taskId, imageDataUrl);
   };
   
   reader.onerror = function() {
-    console.error('Ошибка при чтении файла');
+    console.error('❌ Ошибка при чтении файла');
     alert('Ошибка при чтении файла');
   };
   
   reader.readAsDataURL(file);
 }
 
-// =====================
-// 📤 ОБНОВЛЕННАЯ СИСТЕМА ЗАДАНИЙ
-// =====================
-
+// Отправка задания на проверку
 async function completeTaskWithPhoto(taskId, photoDataUrl) {
-  console.log('Отправка задания на сервер ID:', taskId);
-  
   try {
     const userInfo = getUserInfo();
-    
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
-    if (taskIndex !== -1 && tasks[taskIndex].wasRejected) {
-      tasks[taskIndex].wasRejected = false;
-    }
     
     const response = await fetch(`${API_BASE}/api/submit-task`, {
       method: 'POST',
@@ -901,45 +776,23 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
     });
 
     if (response.ok) {
-      const result = await response.json();
-      console.log('Задание отправлено на проверку:', result);
-      
       showNotification('📸 Фото отправлено на проверку! Ожидайте начисления лавок.', 'success');
-      markTaskAsPending(taskId);
       
-      // Сохраняем состояние после отправки
-      saveFullUserState();
+      // Обновляем локальный статус задания
+      const taskIndex = tasks.findIndex(t => t.id === taskId);
+      if (taskIndex !== -1) {
+        tasks[taskIndex].pendingApproval = true;
+        tasks[taskIndex].canSubmit = false;
+        renderTasks();
+      }
+      
     } else {
-      throw new Error('Ошибка сервера');
+      const errorData = await response.json();
+      showNotification(`❌ ${errorData.error}`, 'error');
     }
   } catch (error) {
-    console.log('Сервер недоступен, сохраняем локально:', error);
-    
-    const taskIndex = tasks.findIndex(t => t.id === taskId);
-    if (taskIndex !== -1) {
-      tasks[taskIndex].userPhoto = photoDataUrl;
-      tasks[taskIndex].completed = true;
-      tasks[taskIndex].pendingApproval = true;
-      
-      lavki += tasks[taskIndex].reward;
-      updateLavki();
-      saveTasksToStorage(); // Это вызовет автосохранение
-      renderTasks();
-      animateCharacterReward();
-      
-      alert(`Задание "${tasks[taskIndex].name}" выполнено! Получено ${tasks[taskIndex].reward} лавок 💎\n(режим оффлайн)`);
-    }
-  }
-}
-
-function markTaskAsPending(taskId) {
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
-  if (taskIndex !== -1) {
-    tasks[taskIndex].pendingApproval = true;
-    tasks[taskIndex].completed = false;
-    tasks[taskIndex].wasRejected = false;
-    saveTasksToStorage(); // Автосохранение
-    renderTasks();
+    console.log('❌ Сервер недоступен:', error);
+    showNotification('❌ Ошибка соединения с сервером', 'error');
   }
 }
 
@@ -962,11 +815,12 @@ async function checkApprovedTasks() {
         approvedTasks.forEach(task => {
           // Находим задание в локальном списке
           const taskIndex = tasks.findIndex(t => t.id === task.taskId);
-          if (taskIndex !== -1 && !tasks[taskIndex].completed) {
+          if (taskIndex !== -1 && !tasks[taskIndex].userCompleted) {
             // Начисляем лавки
             lavki += tasks[taskIndex].reward;
-            tasks[taskIndex].completed = true;
+            tasks[taskIndex].userCompleted = true;
             tasks[taskIndex].pendingApproval = false;
+            tasks[taskIndex].canSubmit = false;
             
             // Показываем уведомление
             showNotification(`🎉 Задание "${tasks[taskIndex].name}" подтверждено! Получено ${tasks[taskIndex].reward} лавок`, 'success');
@@ -975,19 +829,15 @@ async function checkApprovedTasks() {
         });
         
         updateLavki();
-        saveTasksToStorage();
         renderTasks();
       }
     }
   } catch (error) {
-    console.log('Ошибка проверки подтвержденных заданий:', error);
+    console.log('❌ Ошибка проверки подтвержденных заданий:', error);
   }
 }
 
-// =====================
-// 🔄 ПРОВЕРКА ОТКЛОНЕННЫХ ЗАДАНИЙ
-// =====================
-
+// Проверка отклоненных заданий
 async function checkRejectedTasks() {
   try {
     const userInfo = getUserInfo();
@@ -1004,38 +854,35 @@ async function checkRejectedTasks() {
           // Находим задание в локальном списке и сбрасываем статус
           const taskIndex = tasks.findIndex(t => t.id === task.taskId);
           if (taskIndex !== -1) {
-            tasks[taskIndex].completed = false;
             tasks[taskIndex].pendingApproval = false;
-            tasks[taskIndex].userPhoto = null;
-            tasks[taskIndex].wasRejected = true; // Помечаем как отклоненное
+            tasks[taskIndex].canSubmit = true;
             
             // Показываем уведомление с причиной отклонения
             showNotification(`❌ Задание "${tasks[taskIndex].name}" отклонено: ${task.rejectionReason}`, 'error');
           }
         });
         
-        saveTasksToStorage();
         renderTasks();
       }
     }
   } catch (error) {
-    console.log('Ошибка проверки отклоненных заданий:', error);
+    console.log('❌ Ошибка проверки отклоненных заданий:', error);
   }
 }
 
-// ДОБАВЛЕНО: Периодическая синхронизация заданий
+// Периодическая синхронизация заданий
 function startTasksSync() {
   setInterval(() => {
     loadTasksFromServer();
-  }, 30000); // 30 секунд
+  }, 30000);
 }
 
 // Периодическая проверка каждые 30 секунд
 function startTaskChecking() {
   setInterval(() => {
     checkApprovedTasks();
-    checkRejectedTasks(); // ДОБАВЛЕНО: проверка отклоненных заданий
-  }, 30000); // 30 секунд
+    checkRejectedTasks();
+  }, 30000);
 }
 
 // =====================
@@ -1048,16 +895,6 @@ function animateCharacterReward() {
     setTimeout(() => img.classList.remove('bounce'), 1000);
   }
 }
-
-// =====================
-// ДЕБАГ ФУНКЦИИ
-// =====================
-function debugTasks() {
-  console.log('Текущие задания:', tasks);
-  console.log('LocalStorage tasks:', localStorage.getItem('tasks'));
-}
-
-window.debugTasks = debugTasks;
 
 // =====================
 // 🎯 ИСПРАВЛЕНИЯ ОТОБРАЖЕНИЯ
@@ -1081,7 +918,7 @@ function checkImages() {
   const images = document.querySelectorAll('img');
   images.forEach(img => {
     img.onerror = function() {
-      console.log('Ошибка загрузки изображения:', this.src);
+      console.log('❌ Ошибка загрузки изображения:', this.src);
       this.src = 'https://via.placeholder.com/200x200/ECF0F1/666?text=🎮';
     };
   });
@@ -1116,14 +953,10 @@ function liftCharacterImage() {
 
 async function initializeWithServer() {
   try {
-    // Загружаем задания с сервера
     await loadTasksFromServer();
-    
-    // Загружаем товары магазина
     await loadShopItems();
-    
   } catch (error) {
-    console.log('Сервер недоступен, работаем в оффлайн режиме:', error);
+    console.log('❌ Сервер недоступен, работаем в оффлайн режиме:', error);
   }
 }
 
@@ -1190,10 +1023,11 @@ window.forceSave = forceSave;
 window.loadFromServer = loadFromServer;
 
 // =====================
-// 🚀 ОСНОВНАЯ ИНИЦИАЛИЗАЦИЯ
+// 🚀 ОПТИМИЗИРОВАННАЯ ИНИЦИАЛИЗАЦИЯ
 // =====================
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Быстрая инициализация навигации
   const navButtons = document.querySelectorAll('.nav button');
   navButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -1208,55 +1042,58 @@ document.addEventListener('DOMContentLoaded', () => {
   showScreen('character');
   if (navButtons[0]) navButtons[0].classList.add('active');
 
-  // СНАЧАЛА пробуем загрузить полное состояние с сервера
-  setTimeout(() => {
-    loadFullUserState().then(success => {
-      if (!success) {
-        // Если не удалось загрузить с сервера, используем локальные данные
-        console.log('Используем локальные данные');
-        lavki = parseInt(localStorage.getItem('lavki')) || 0;
-        initializeTasks();
-        loadCharacter();
-        updateLavki();
-      }
-      
-      // Инициализируем остальное в любом случае
-      renderTasks();
-      loadCharacterName();
-      initializeCharacterSelector();
-      initializeDisplayValues();
-      checkImages();
-      
-      // Инициализация пользователя
-      initializeUser();
-    });
-  }, 100);
-
-  // Периодическое автосохранение каждые 30 секунд
-  setInterval(() => {
-    saveFullUserState();
-  }, 30000);
-
-  // Сохраняем при закрытии/обновлении страницы
-  window.addEventListener('beforeunload', () => {
-    saveFullUserState();
+  // Параллельная инициализация для скорости
+  Promise.all([
+    // Быстрые операции
+    loadCharacter(),
+    loadCharacterName(),
+    initializeCharacterSelector(),
+    initializeDisplayValues(),
+    checkImages()
+  ]).then(() => {
+    // Затем загружаем данные с сервера
+    setTimeout(() => {
+      loadFullUserState().then(success => {
+        if (!success) {
+          lavki = parseInt(localStorage.getItem('lavki')) || 0;
+          initializeTasks();
+          updateLavki();
+        }
+        
+        initializeUser();
+        initializeWithServer();
+      });
+    }, 100);
   });
 
-  setTimeout(() => {
-    initializeWithServer();
-  }, 1000);
-  
+  // Оптимизированные таймеры
   setTimeout(() => {
     startTaskChecking();
     startTasksSync();
-    setTimeout(checkApprovedTasks, 5000);
-    setTimeout(checkRejectedTasks, 5000);
-  }, 2000);
+    setTimeout(checkApprovedTasks, 2000);
+    setTimeout(checkRejectedTasks, 2000);
+  }, 3000);
+
+  // Автосохранение с дебаунсингом
+  let saveTimeout;
+  const scheduleSave = () => {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(saveFullUserState, 2000);
+  };
+
+  // Сохраняем при закрытии/обновлении страницы
+  window.addEventListener('beforeunload', scheduleSave);
+});
+
+// Оптимизированный ресайз
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(liftCharacterImage, 100);
 });
 
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(liftCharacterImage, 100);
-  window.addEventListener('resize', liftCharacterImage);
 });
 
 // Добавляем анимацию для уведомлений
