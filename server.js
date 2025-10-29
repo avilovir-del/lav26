@@ -15,18 +15,26 @@ app.use(express.static('.'));
 // Файл данных
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-// Загрузка данных
+// Кэш данных для производительности
+let dataCache = null;
+let lastSaveTime = 0;
+const SAVE_DEBOUNCE = 1000; // 1 секунда
+
+// Загрузка данных с кэшированием
 function loadData() {
+  if (dataCache) return dataCache;
+  
   try {
     if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      dataCache = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      return dataCache;
     }
   } catch (error) {
     console.log('Ошибка загрузки данных, создаем новые:', error.message);
   }
   
   // Данные по умолчанию
-  return {
+  dataCache = {
     admin: {
       password: bcrypt.hashSync("admin123", 10)
     },
@@ -44,11 +52,29 @@ function loadData() {
     purchases: [],
     purchaseRequests: []
   };
+  
+  return dataCache;
 }
 
-// Сохранение данных
+// Сохранение данных с дебаунсингом
 function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  const now = Date.now();
+  if (now - lastSaveTime < SAVE_DEBOUNCE) {
+    return; // Слишком частые сохранения - пропускаем
+  }
+  
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    lastSaveTime = now;
+    console.log('💾 Данные сохранены');
+  } catch (error) {
+    console.error('❌ Ошибка сохранения данных:', error);
+  }
+}
+
+// Инвалидация кэша
+function invalidateCache() {
+  dataCache = null;
 }
 
 // Проверка авторизации
@@ -65,13 +91,12 @@ function requireAuth(req, res, next) {
 // 📊 API ДЛЯ ПРИЛОЖЕНИЯ
 // ======================
 
-// ДОБАВЛЕНО: Инициализация пользователя при входе
+// Инициализация пользователя при входе
 app.post('/api/initialize-user', (req, res) => {
   const { userId, userName, userContact } = req.body;
   
   const data = loadData();
   
-  // Создаем пользователя если его нет
   if (!data.users[userId]) {
     data.users[userId] = {
       lavki: 0,
@@ -81,12 +106,12 @@ app.post('/api/initialize-user', (req, res) => {
       userName: userName || 'Аноним',
       userContact: userContact || 'Не указан',
       settings: {},
-      gameState: {}
+      gameState: {},
+      completedTaskIds: [] // ДОБАВЛЕНО: список выполненных заданий
     };
     saveData(data);
-    console.log('Новый пользователь создан:', userId);
+    console.log('👤 Новый пользователь создан:', userId);
   } else {
-    // Обновляем активность существующего пользователя
     data.users[userId].lastActivity = new Date().toISOString();
     saveData(data);
   }
@@ -94,10 +119,26 @@ app.post('/api/initialize-user', (req, res) => {
   res.json({ success: true, user: data.users[userId] });
 });
 
-// Получить активные задания
-app.get('/api/tasks', (req, res) => {
+// Получить активные задания с информацией о выполнении
+app.get('/api/tasks/:userId', (req, res) => {
   const data = loadData();
-  const activeTasks = data.tasks.filter(task => task.active);
+  const userId = req.params.userId;
+  const user = data.users[userId];
+  
+  const activeTasks = data.tasks.filter(task => task.active).map(task => {
+    const userCompleted = user && user.completedTaskIds ? user.completedTaskIds.includes(task.id) : false;
+    const pendingSubmission = data.submissions.find(
+      s => s.userId === userId && s.taskId === task.id && s.status === 'pending'
+    );
+    
+    return {
+      ...task,
+      userCompleted: userCompleted,
+      pendingApproval: !!pendingSubmission,
+      canSubmit: !userCompleted && !pendingSubmission
+    };
+  });
+  
   res.json(activeTasks);
 });
 
@@ -107,13 +148,27 @@ app.post('/api/submit-task', (req, res) => {
   
   const data = loadData();
   const task = data.tasks.find(t => t.id === taskId);
+  const user = data.users[userId];
   
   if (!task) {
     return res.status(404).json({ error: 'Задание не найдено' });
   }
 
+  // ПРОВЕРКА: задание уже выполнено
+  if (user && user.completedTaskIds && user.completedTaskIds.includes(taskId)) {
+    return res.status(400).json({ error: 'Задание уже выполнено' });
+  }
+
+  // ПРОВЕРКА: задание уже на проверке
+  const existingSubmission = data.submissions.find(
+    s => s.userId === userId && s.taskId === taskId && s.status === 'pending'
+  );
+  if (existingSubmission) {
+    return res.status(400).json({ error: 'Задание уже отправлено на проверку' });
+  }
+
   // Создаем или обновляем данные пользователя
-  if (!data.users[userId]) {
+  if (!user) {
     data.users[userId] = {
       lavki: 0,
       registrationDate: new Date().toISOString(),
@@ -122,7 +177,8 @@ app.post('/api/submit-task', (req, res) => {
       userName: userName || 'Аноним',
       userContact: userContact || 'Не указан',
       settings: {},
-      gameState: {}
+      gameState: {},
+      completedTaskIds: []
     };
   } else {
     data.users[userId].lastActivity = new Date().toISOString();
@@ -135,14 +191,13 @@ app.post('/api/submit-task', (req, res) => {
     id: Date.now(),
     taskId,
     taskName: task.name,
-    userId: userId || 'unknown',
+    userId,
     userName: userName || 'Аноним',
     userContact: userContact || 'Не указан',
     photo,
     reward: task.reward,
     status: 'pending',
-    submittedAt: new Date().toISOString(),
-    attempts: 1
+    submittedAt: new Date().toISOString()
   };
 
   data.submissions.push(submission);
@@ -159,13 +214,12 @@ app.get('/api/user/:userId/balance', (req, res) => {
   res.json({ lavki: user.lavki });
 });
 
-// ДОБАВЛЕНО: Получить покупки пользователя
+// Получить покупки пользователя
 app.get('/api/user/:userId/purchases', (req, res) => {
   const data = loadData();
   const userId = req.params.userId;
   const userPurchases = (data.purchases || []).filter(p => p.userId === userId);
   
-  // Сортируем по дате (новые сверху)
   userPurchases.sort((a, b) => new Date(b.purchasedAt) - new Date(a.purchasedAt));
   
   res.json(userPurchases);
@@ -192,7 +246,7 @@ app.post('/api/buy-item', (req, res) => {
     return res.status(400).json({ error: 'Недостаточно лавок' });
   }
   
-  // Создаем заявку вместо прямой покупки
+  // Создаем заявку
   if (!data.purchaseRequests) {
     data.purchaseRequests = [];
   }
@@ -220,7 +274,6 @@ app.post('/api/buy-item', (req, res) => {
 app.get('/api/admin/purchase-requests', requireAuth, (req, res) => {
   const data = loadData();
   const requests = data.purchaseRequests || [];
-  // Сортируем по дате (новые сверху)
   requests.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
   res.json(requests);
 });
@@ -287,7 +340,18 @@ app.get('/api/user/:userId/approved-tasks', (req, res) => {
       taskName: submission.taskName,
       reward: submission.reward
     });
-    submission.processed = true; // Помечаем как обработанное
+    submission.processed = true;
+    
+    // ДОБАВЛЕНО: помечаем задание как выполненное у пользователя
+    if (data.users[userId]) {
+      if (!data.users[userId].completedTaskIds) {
+        data.users[userId].completedTaskIds = [];
+      }
+      if (!data.users[userId].completedTaskIds.includes(submission.taskId)) {
+        data.users[userId].completedTaskIds.push(submission.taskId);
+      }
+      data.users[userId].completedTasks = (data.users[userId].completedTasks || 0) + 1;
+    }
   });
   
   saveData(data);
@@ -312,7 +376,7 @@ app.get('/api/user/:userId/rejected-tasks', (req, res) => {
       taskName: submission.taskName,
       rejectionReason: submission.rejectionReason || 'Попробуйте ещё раз'
     });
-    submission.userNotified = true; // Помечаем как уведомленное
+    submission.userNotified = true;
   });
   
   saveData(data);
@@ -334,7 +398,8 @@ app.get('/api/admin/users', requireAuth, (req, res) => {
     completedTasks: userData.completedTasks || 0,
     lastActivity: userData.lastActivity || 'Неизвестно',
     userName: userData.userName || 'Аноним',
-    userContact: userData.userContact || 'Не указан'
+    userContact: userData.userContact || 'Не указан',
+    completedTaskIds: userData.completedTaskIds || []
   }));
   
   res.json(users);
@@ -362,6 +427,7 @@ app.get('/api/admin/users/:userId', requireAuth, (req, res) => {
     lastActivity: user.lastActivity || 'Неизвестно',
     userName: user.userName || 'Аноним',
     userContact: user.userContact || 'Не указан',
+    completedTaskIds: user.completedTaskIds || [],
     totalSubmissions: userSubmissions.length,
     approvedSubmissions: userSubmissions.filter(s => s.status === 'approved').length,
     pendingSubmissions: userSubmissions.filter(s => s.status === 'pending').length,
@@ -391,7 +457,7 @@ app.put('/api/admin/users/:userId/balance', requireAuth, (req, res) => {
   res.json({ success: true, message: 'Баланс обновлен' });
 });
 
-// ДОБАВЛЕНО: Сброс персонажа пользователя
+// Сброс персонажа пользователя
 app.post('/api/admin/users/:userId/reset', requireAuth, (req, res) => {
   const userId = req.params.userId;
   const data = loadData();
@@ -406,6 +472,7 @@ app.post('/api/admin/users/:userId/reset', requireAuth, (req, res) => {
   data.users[userId].lastActivity = new Date().toISOString();
   data.users[userId].settings = {};
   data.users[userId].gameState = {};
+  data.users[userId].completedTaskIds = [];
   
   // Удаляем все submissions пользователя
   data.submissions = data.submissions.filter(s => s.userId !== userId);
@@ -436,7 +503,6 @@ app.post('/api/user/:userId/state', (req, res) => {
   const data = loadData();
   
   if (!data.users[userId]) {
-    // Создаем пользователя если не существует
     data.users[userId] = {
       lavki: 0,
       registrationDate: new Date().toISOString(),
@@ -445,7 +511,8 @@ app.post('/api/user/:userId/state', (req, res) => {
       userName: 'Аноним',
       userContact: 'Не указан',
       settings: {},
-      gameState: {}
+      gameState: {},
+      completedTaskIds: []
     };
   }
   
@@ -476,29 +543,9 @@ app.get('/api/user/:userId/state', (req, res) => {
     settings: user.settings || {},
     gameState: user.gameState || {},
     completedTasks: user.completedTasks || 0,
+    completedTaskIds: user.completedTaskIds || [],
     registrationDate: user.registrationDate
   });
-});
-
-// Сохранить прогресс заданий
-app.post('/api/user/:userId/tasks-progress', (req, res) => {
-  const { tasksProgress } = req.body;
-  const userId = req.params.userId;
-  const data = loadData();
-  
-  if (!data.users[userId]) {
-    return res.status(404).json({ error: 'Пользователь не найден' });
-  }
-  
-  if (!data.users[userId].gameState) {
-    data.users[userId].gameState = {};
-  }
-  
-  data.users[userId].gameState.tasksProgress = tasksProgress;
-  data.users[userId].lastActivity = new Date().toISOString();
-  
-  saveData(data);
-  res.json({ success: true });
 });
 
 // ======================
@@ -547,7 +594,7 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
   // Обновляем статус
   submission.status = 'approved';
   submission.reviewedAt = new Date().toISOString();
-  submission.processed = false; // Важно: помечаем как необработанное
+  submission.processed = false;
   
   // Начисляем лавки пользователю
   const userId = submission.userId;
@@ -557,18 +604,27 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
       completedTasks: 0,
       registrationDate: new Date().toISOString(),
       settings: {},
-      gameState: {}
+      gameState: {},
+      completedTaskIds: []
     };
   }
   data.users[userId].lavki += submission.reward;
   data.users[userId].completedTasks = (data.users[userId].completedTasks || 0) + 1;
   data.users[userId].lastActivity = new Date().toISOString();
   
+  // ДОБАВЛЕНО: помечаем задание как выполненное
+  if (!data.users[userId].completedTaskIds) {
+    data.users[userId].completedTaskIds = [];
+  }
+  if (!data.users[userId].completedTaskIds.includes(submission.taskId)) {
+    data.users[userId].completedTaskIds.push(submission.taskId);
+  }
+  
   saveData(data);
   res.json({ 
     success: true, 
     message: 'Задание подтверждено',
-    userNotified: false // Пользователь получит уведомление при следующей проверке
+    userNotified: false
   });
 });
 
@@ -588,7 +644,7 @@ app.post('/api/admin/submissions/:id/reject', requireAuth, (req, res) => {
   submission.status = 'rejected';
   submission.reviewedAt = new Date().toISOString();
   submission.rejectionReason = rejectionReason || 'Попробуйте ещё раз';
-  submission.userNotified = false; // Помечаем, что пользователь еще не уведомлен
+  submission.userNotified = false;
   
   saveData(data);
   res.json({ success: true, message: 'Задание отклонено' });
