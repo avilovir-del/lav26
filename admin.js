@@ -26,14 +26,55 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-// Уведомления
+// Улучшенные уведомления
 function showNotification(message, type = 'info') {
-    if (type === 'error') {
-        alert('❌ ' + message);
-    } else {
-        alert('✅ ' + message);
-    }
+  // Создаем красивый toast вместо alert
+  const notification = document.createElement('div');
+  notification.innerHTML = `
+    <div style="
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : '#2196f3'};
+      color: white;
+      padding: 16px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      max-width: 400px;
+      animation: slideInRight 0.3s ease;
+      font-weight: 600;
+    ">
+      ${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'} ${message}
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.3s ease forwards';
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 300);
+  }, 4000);
 }
+
+// Добавим стили для анимации
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+`;
+document.head.appendChild(style);
 
 // Авторизация
 async function login() {
@@ -218,40 +259,42 @@ async function loadSubmissions() {
 
 // Подтверждение задания
 async function approveSubmission(submissionId) {
-    if (!confirm('Подтвердить выполнение задания и начислить лавки?')) return;
+  if (!confirm('Подтвердить выполнение задания и начислить лавки?\n\nЭто действие нельзя отменить.')) return;
+  
+  try {
+    showNotification('⏳ Подтверждаем задание...', 'info');
+    await apiCall(`/api/admin/submissions/${submissionId}/approve`, {
+      method: 'POST'
+    });
     
-    try {
-        await apiCall(`/api/admin/submissions/${submissionId}/approve`, {
-            method: 'POST'
-        });
-        
-        showNotification('Задание подтверждено! Лавки начислены.');
-        loadSubmissions();
-        loadDashboard();
-    } catch (error) {
-        showNotification('Ошибка подтверждения задания', 'error');
-    }
+    showNotification('✅ Задание подтверждено! Лавки начислены.');
+    loadSubmissions();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка подтверждения задания', 'error');
+  }
 }
 
 // Отклонение задания
 async function rejectSubmission(submissionId) {
-    const rejectionReason = prompt('Укажите причину отклонения (например: "Попробуй ещё раз", "Фото нечеткое", "Неправильное выполнение"):', 'Попробуй ещё раз');
+  const rejectionReason = prompt('Укажите причину отклонения (например: "Попробуй ещё раз", "Фото нечеткое", "Неправильное выполнение"):', 'Попробуй ещё раз');
+  
+  if (rejectionReason === null) return;
+  
+  if (!confirm('Отклонить это задание?\n\nПользователь сможет отправить его снова.')) return;
+  
+  try {
+    showNotification('⏳ Отклоняем задание...', 'info');
+    await apiCall(`/api/admin/submissions/${submissionId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ rejectionReason })
+    });
     
-    if (rejectionReason === null) return; // Пользователь отменил
-    
-    if (!confirm('Отклонить это задание?')) return;
-    
-    try {
-        await apiCall(`/api/admin/submissions/${submissionId}/reject`, {
-            method: 'POST',
-            body: JSON.stringify({ rejectionReason })
-        });
-        
-        showNotification('Задание отклонено. Пользователь сможет отправить его снова.');
-        loadSubmissions();
-    } catch (error) {
-        showNotification('Ошибка отклонения задания', 'error');
-    }
+    showNotification('✅ Задание отклонено. Пользователь сможет отправить его снова.');
+    loadSubmissions();
+  } catch (error) {
+    showNotification('❌ Ошибка отклонения задания', 'error');
+  }
 }
 
 // Загрузка заявок на покупку
@@ -333,28 +376,32 @@ async function loadPurchaseRequests() {
 
 // Обработка заявки на покупку
 async function processPurchaseRequest(requestId, status) {
-    const action = status === 'approved' ? 'подтвердить' : 'отклонить';
+  const action = status === 'approved' ? 'подтвердить' : 'отклонить';
+  const confirmMessage = status === 'approved' 
+    ? 'Подтвердить покупку и списать лавки у пользователя?\n\nЭто действие нельзя отменить.'
+    : 'Отклонить заявку на покупку?\n\nЛавки останутся у пользователя.';
+  
+  if (!confirm(confirmMessage)) return;
+  
+  const adminNotes = status === 'rejected' ? 
+    prompt('Укажите причину отклонения (необязательно):') : null;
+  
+  try {
+    showNotification('⏳ Обрабатываем заявку...', 'info');
+    await apiCall(`/api/admin/purchase-requests/${requestId}/process`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        status: status,
+        adminNotes: adminNotes
+      })
+    });
     
-    if (!confirm(`Вы уверены, что хотите ${action} эту заявку на покупку?`)) return;
-    
-    const adminNotes = status === 'rejected' ? 
-        prompt('Укажите причину отклонения (необязательно):') : null;
-    
-    try {
-        await apiCall(`/api/admin/purchase-requests/${requestId}/process`, {
-            method: 'POST',
-            body: JSON.stringify({ 
-                status: status,
-                adminNotes: adminNotes
-            })
-        });
-        
-        showNotification(`Заявка ${status === 'approved' ? 'подтверждена' : 'отклонена'}!`);
-        loadPurchaseRequests();
-        loadDashboard();
-    } catch (error) {
-        showNotification('Ошибка обработки заявки', 'error');
-    }
+    showNotification(`✅ Заявка ${status === 'approved' ? 'подтверждена' : 'отклонена'}!`);
+    loadPurchaseRequests();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка обработки заявки', 'error');
+  }
 }
 
 // Загрузка списка пользователей
@@ -438,19 +485,26 @@ async function loadUsers() {
 
 // ДОБАВЛЕНО: Сброс персонажа пользователя
 async function resetUserCharacter(userId) {
-    if (!confirm(`Вы уверены, что хотите сбросить персонажа пользователя ${userId}?\n\nЭто действие:\n• Обнулит все лавки\n• Сбросит прогресс заданий\n• Удалит историю покупок\n• Сбросит статистику`)) return;
+  if (!confirm(`🚨 ВНИМАНИЕ: Вы уверены, что хотите полностью сбросить персонажа пользователя?\n\nЭто действие НЕОБРАТИМО и приведет к:\n• Обнулению всех лавок\n• Сбросу прогресса заданий\n• Удалению истории покупок\n• Сбросу всей статистики`)) return;
+  
+  const confirmReset = prompt('Для подтверждения введите "СБРОСИТЬ" (без кавычек):');
+  if (confirmReset !== 'СБРОСИТЬ') {
+    showNotification('❌ Сброс отменен', 'error');
+    return;
+  }
+  
+  try {
+    showNotification('⏳ Сбрасываем персонажа...', 'info');
+    await apiCall(`/api/admin/users/${userId}/reset`, {
+      method: 'POST'
+    });
     
-    try {
-        await apiCall(`/api/admin/users/${userId}/reset`, {
-            method: 'POST'
-        });
-        
-        showNotification('Персонаж пользователя сброшен!');
-        loadUsers();
-        loadDashboard();
-    } catch (error) {
-        showNotification('Ошибка сброса персонажа', 'error');
-    }
+    showNotification('✅ Персонаж пользователя полностью сброшен!');
+    loadUsers();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка сброса персонажа', 'error');
+  }
 }
 
 // Поиск пользователей
@@ -534,27 +588,31 @@ async function viewUserDetails(userId) {
 
 // Изменение баланса пользователя
 async function editUserBalance(userId, currentBalance) {
-    const newBalance = prompt(`Введите новый баланс для пользователя ${userId}:`, currentBalance);
+  const newBalance = prompt(`Введите новый баланс для пользователя:\n\nТекущий баланс: ${currentBalance} лавок`, currentBalance);
+  
+  if (newBalance === null) return;
+  
+  const balance = parseInt(newBalance);
+  if (isNaN(balance) || balance < 0) {
+    showNotification('❌ Введите корректное число (0 или больше)', 'error');
+    return;
+  }
+  
+  if (!confirm(`Изменить баланс пользователя?\n\nБыло: ${currentBalance} лавок\nСтанет: ${balance} лавок`)) return;
+  
+  try {
+    showNotification('⏳ Обновляем баланс...', 'info');
+    await apiCall(`/api/admin/users/${userId}/balance`, {
+      method: 'PUT',
+      body: JSON.stringify({ lavki: balance })
+    });
     
-    if (newBalance === null) return;
-    
-    const balance = parseInt(newBalance);
-    if (isNaN(balance) || balance < 0) {
-        showNotification('Введите корректное число', 'error');
-        return;
-    }
-    
-    try {
-        await apiCall(`/api/admin/users/${userId}/balance`, {
-            method: 'PUT',
-            body: JSON.stringify({ lavki: balance })
-        });
-        
-        showNotification('Баланс пользователя обновлен!');
-        loadUsers();
-    } catch (error) {
-        showNotification('Ошибка обновления баланса', 'error');
-    }
+    showNotification('✅ Баланс пользователя обновлен!');
+    loadUsers();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка обновления баланса', 'error');
+  }
 }
 
 // Закрытие модального окна
@@ -601,43 +659,52 @@ async function loadTasks() {
 
 // Добавление нового задания
 async function addNewTask() {
-    const name = document.getElementById('new-task-name').value;
-    const reward = document.getElementById('new-task-reward').value;
+  const name = document.getElementById('new-task-name').value;
+  const reward = document.getElementById('new-task-reward').value;
+  
+  if (!name || !reward) {
+    showNotification('❌ Заполните все поля', 'error');
+    return;
+  }
+  
+  if (!confirm(`Добавить новое задание?\n\n"${name}"\nНаграда: ${reward} лавок`)) return;
+  
+  try {
+    showNotification('⏳ Добавляем задание...', 'info');
+    await apiCall('/api/admin/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ name, reward: parseInt(reward) })
+    });
     
-    if (!name || !reward) {
-        showNotification('Заполните все поля', 'error');
-        return;
-    }
-    
-    try {
-        await apiCall('/api/admin/tasks', {
-            method: 'POST',
-            body: JSON.stringify({ name, reward: parseInt(reward) })
-        });
-        
-        showNotification('Новое задание добавлено!');
-        document.getElementById('new-task-name').value = '';
-        document.getElementById('new-task-reward').value = '';
-        loadTasks();
-        loadDashboard();
-    } catch (error) {
-        showNotification('Ошибка добавления задания', 'error');
-    }
+    showNotification('✅ Новое задание добавлено!');
+    document.getElementById('new-task-name').value = '';
+    document.getElementById('new-task-reward').value = '';
+    loadTasks();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка добавления задания', 'error');
+  }
 }
 
 // Переключение активности задания
 async function toggleTask(taskId, active) {
-    try {
-        await apiCall(`/api/admin/tasks/${taskId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ active })
-        });
-        
-        showNotification(`Задание ${active ? 'активировано' : 'деактивировано'}`);
-        loadTasks();
-    } catch (error) {
-        showNotification('Ошибка изменения задания', 'error');
-    }
+  const action = active ? 'активировать' : 'деактивировать';
+  
+  if (!confirm(`${active ? '✅ Активировать' : '❌ Деактивировать'} это задание?`)) return;
+  
+  try {
+    showNotification('⏳ Обновляем задание...', 'info');
+    await apiCall(`/api/admin/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ active })
+    });
+    
+    showNotification(`✅ Задание ${active ? 'активировано' : 'деактивировано'}`);
+    loadTasks();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка изменения задания', 'error');
+  }
 }
 
 // Загрузка магазина
@@ -676,86 +743,122 @@ async function loadShop() {
 
 // Добавление нового товара
 async function addNewShopItem() {
-    const name = document.getElementById('new-item-name').value;
-    const price = document.getElementById('new-item-price').value;
+  const name = document.getElementById('new-item-name').value;
+  const price = document.getElementById('new-item-price').value;
+  
+  if (!name || !price) {
+    showNotification('❌ Заполните все поля', 'error');
+    return;
+  }
+  
+  if (!confirm(`Добавить новый товар?\n\n"${name}"\nЦена: ${price} лавок`)) return;
+  
+  try {
+    showNotification('⏳ Добавляем товар...', 'info');
+    await apiCall('/api/admin/shop', {
+      method: 'POST',
+      body: JSON.stringify({ name, price: parseInt(price) })
+    });
     
-    if (!name || !price) {
-        showNotification('Заполните все поля', 'error');
-        return;
-    }
-    
-    try {
-        await apiCall('/api/admin/shop', {
-            method: 'POST',
-            body: JSON.stringify({ name, price: parseInt(price) })
-        });
-        
-        showNotification('Новый товар добавлен!');
-        document.getElementById('new-item-name').value = '';
-        document.getElementById('new-item-price').value = '';
-        loadShop();
-        loadDashboard();
-    } catch (error) {
-        showNotification('Ошибка добавления товара', 'error');
-    }
+    showNotification('✅ Новый товар добавлен!');
+    document.getElementById('new-item-name').value = '';
+    document.getElementById('new-item-price').value = '';
+    loadShop();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка добавления товара', 'error');
+  }
 }
 
 // Переключение активности товара
 async function toggleShopItem(itemId, active) {
-    try {
-        await apiCall(`/api/admin/shop/${itemId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ active })
-        });
-        
-        showNotification(`Товар ${active ? 'добавлен в продажу' : 'снят с продажи'}`);
-        loadShop();
-    } catch (error) {
-        showNotification('Ошибка изменения товара', 'error');
-    }
+  const action = active ? 'в продажу' : 'с продажи';
+  
+  if (!confirm(`${active ? '✅ Вернуть в продажу' : '❌ Снять с продажи'} этот товар?`)) return;
+  
+  try {
+    showNotification('⏳ Обновляем товар...', 'info');
+    await apiCall(`/api/admin/shop/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ active })
+    });
+    
+    showNotification(`✅ Товар ${active ? 'добавлен в продажу' : 'снят с продажи'}`);
+    loadShop();
+    loadDashboard();
+  } catch (error) {
+    showNotification('❌ Ошибка изменения товара', 'error');
+  }
 }
 
 // Смена пароля
 async function changePassword() {
-    const newPassword = document.getElementById('new-password').value;
-    const confirmPassword = document.getElementById('confirm-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+  
+  if (!newPassword || !confirmPassword) {
+    showNotification('❌ Заполните все поля', 'error');
+    return;
+  }
+  
+  if (newPassword !== confirmPassword) {
+    showNotification('❌ Пароли не совпадают', 'error');
+    return;
+  }
+  
+  if (newPassword.length < 4) {
+    showNotification('❌ Пароль должен быть не менее 4 символов', 'error');
+    return;
+  }
+  
+  if (!confirm('Изменить пароль администратора?\n\nЗапомните новый пароль!')) return;
+  
+  try {
+    showNotification('⏳ Меняем пароль...', 'info');
+    await apiCall('/api/admin/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ newPassword })
+    });
     
-    if (!newPassword || !confirmPassword) {
-        showNotification('Заполните все поля', 'error');
-        return;
-    }
-    
-    if (newPassword !== confirmPassword) {
-        showNotification('Пароли не совпадают', 'error');
-        return;
-    }
-    
-    if (newPassword.length < 4) {
-        showNotification('Пароль должен быть не менее 4 символов', 'error');
-        return;
-    }
-    
-    try {
-        await apiCall('/api/admin/change-password', {
-            method: 'POST',
-            body: JSON.stringify({ newPassword })
-        });
-        
-        showNotification('Пароль успешно изменен!');
-        document.getElementById('new-password').value = '';
-        document.getElementById('confirm-password').value = '';
-    } catch (error) {
-        showNotification('Ошибка смены пароля', 'error');
-    }
+    showNotification('✅ Пароль успешно изменен!');
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+  } catch (error) {
+    showNotification('❌ Ошибка смены пароля', 'error');
+  }
 }
 
-// Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', function() {
-    const savedToken = localStorage.getItem('adminToken');
-    if (savedToken) {
-        authToken = savedToken;
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('admin-panel').style.display = 'block';
+// =====================
+// 🔄 АВТООБНОВЛЕНИЕ ДАННЫХ
+// =====================
+
+// Автообновление данных каждые 30 секунд
+function startAutoRefresh() {
+  setInterval(() => {
+    const activeSection = document.querySelector('.section.active');
+    if (activeSection) {
+      const sectionId = activeSection.id;
+      
+      if (sectionId === 'section-submissions') {
+        loadSubmissions();
+      } else if (sectionId === 'section-purchases') {
+        loadPurchaseRequests();
+      } else if (sectionId === 'section-dashboard') {
         loadDashboard();
+      }
+      // Для других разделов обновляем по необходимости
     }
+  }, 30000); // 30 секунд
+}
+
+// Запускаем автообновление после загрузки
+document.addEventListener('DOMContentLoaded', function() {
+  const savedToken = localStorage.getItem('adminToken');
+  if (savedToken) {
+    authToken = savedToken;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    loadDashboard();
+    startAutoRefresh(); // Запускаем автообновление
+  }
 });
