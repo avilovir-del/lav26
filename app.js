@@ -4,6 +4,143 @@
 const API_BASE = window.location.origin;
 
 // =====================
+// 💎 ЛАВКИ - ТЕПЕРЬ ГРУЗИМ С СЕРВЕРА
+// =====================
+let lavki = 0;
+
+// =====================
+// 💾 СИСТЕМА СОХРАНЕНИЯ ПОЛНОГО СОСТОЯНИЯ
+// =====================
+
+// Сохранить все данные пользователя на сервер
+async function saveFullUserState() {
+  try {
+    const userInfo = getUserInfo();
+    
+    // Подготавливаем полное состояние
+    const fullState = {
+      lavki: lavki,
+      settings: {
+        charName: localStorage.getItem('charName') || 'Лавчик',
+        characterImg: localStorage.getItem('characterImg') || 'images/1.png'
+      },
+      tasksProgress: tasks.map(task => ({
+        id: task.id,
+        completed: task.completed,
+        userPhoto: task.userPhoto,
+        pendingApproval: task.pendingApproval,
+        wasRejected: task.wasRejected
+      })),
+      lastSave: new Date().toISOString(),
+      stats: {
+        completedTasksCount: tasks.filter(t => t.completed).length,
+        totalTasks: tasks.length
+      }
+    };
+    
+    const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/state`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ state: fullState })
+    });
+
+    if (response.ok) {
+      console.log('Полное состояние сохранено на сервер');
+    }
+  } catch (error) {
+    console.log('Ошибка сохранения полного состояния:', error);
+  }
+}
+
+// Загрузить все данные пользователя с сервера
+async function loadFullUserState() {
+  try {
+    const userInfo = getUserInfo();
+    const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/state`);
+    
+    if (response.ok) {
+      const userData = await response.json();
+      
+      // Восстанавливаем лавки
+      lavki = userData.lavki || 0;
+      
+      // Восстанавливаем настройки
+      if (userData.settings) {
+        if (userData.settings.charName) {
+          localStorage.setItem('charName', userData.settings.charName);
+        }
+        if (userData.settings.characterImg) {
+          localStorage.setItem('characterImg', userData.settings.characterImg);
+        }
+      }
+      
+      // Восстанавливаем прогресс заданий
+      if (userData.gameState && userData.gameState.tasksProgress) {
+        restoreTasksProgress(userData.gameState.tasksProgress);
+      }
+      
+      updateLavki();
+      updateCharacterDisplay();
+      renderTasks();
+      
+      console.log('Полное состояние загружено с сервера:', userData);
+      return true;
+    }
+  } catch (error) {
+    console.log('Ошибка загрузки полного состояния:', error);
+  }
+  
+  return false;
+}
+
+// Восстановить прогресс заданий
+function restoreTasksProgress(tasksProgress) {
+  tasksProgress.forEach(progress => {
+    const taskIndex = tasks.findIndex(t => t.id === progress.id);
+    if (taskIndex !== -1) {
+      tasks[taskIndex].completed = progress.completed || false;
+      tasks[taskIndex].userPhoto = progress.userPhoto || null;
+      tasks[taskIndex].pendingApproval = progress.pendingApproval || false;
+      tasks[taskIndex].wasRejected = progress.wasRejected || false;
+    }
+  });
+  saveTasksToStorage();
+}
+
+// Функция для загрузки данных пользователя
+async function loadUserData() {
+    try {
+        const userInfo = getUserInfo();
+        const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/data`);
+        if (response.ok) {
+            const userData = await response.json();
+            lavki = userData.lavki || 0;
+            
+            // Загружаем локальные настройки из серверных данных
+            if (userData.settings) {
+                if (userData.settings.charName) {
+                    localStorage.setItem('charName', userData.settings.charName);
+                }
+                if (userData.settings.characterImg) {
+                    localStorage.setItem('characterImg', userData.settings.characterImg);
+                }
+            }
+            
+            updateLavki();
+            updateCharacterDisplay();
+            console.log('Данные пользователя загружены с сервера:', userData);
+        }
+    } catch (error) {
+        console.log('Ошибка загрузки данных пользователя, используем локальные данные:', error);
+        // Fallback: загружаем из localStorage
+        lavki = parseInt(localStorage.getItem('lavki')) || 0;
+        updateLavki();
+    }
+}
+
+// =====================
 // 🌟 НАВИГАЦИЯ
 // =====================
 function showScreen(name) {
@@ -44,13 +181,19 @@ function showScreen(name) {
 // =====================
 // 💎 ЛАВКИ
 // =====================
-let lavki = parseInt(localStorage.getItem('lavki')) || 0;
 
 function updateLavki() {
   const lavkiAmount = document.getElementById('lavki-amount');
   if (lavkiAmount) {
     lavkiAmount.textContent = lavki;
   }
+  
+  // Автоматически сохраняем полное состояние при изменении лавок
+  saveFullUserState().catch(error => {
+    console.log('Ошибка автосохранения:', error);
+  });
+  
+  // Сохраняем локально как fallback
   localStorage.setItem('lavki', lavki);
 }
 
@@ -190,7 +333,7 @@ async function buyItem(itemName, cost, itemId) {
         if (response.ok) {
           // Резервируем лавки локально
           lavki -= cost;
-          updateLavki();
+          updateLavki(); // Автосохранение сработает здесь
           
           showNotification(`✅ Заявка на покупку "${itemName}" отправлена! Ожидайте подтверждения.`, 'success');
         } else {
@@ -268,10 +411,10 @@ function updatePurchasesDisplay(purchases) {
 }
 
 // =====================
-// ⚙️ СИСТЕМА НАСТРОЕК
+// ⚙️ ОБНОВЛЕННАЯ СИСТЕМА НАСТРОЕК
 // =====================
 
-function saveSettings() {
+async function saveSettings() {
   const nameInput = document.getElementById('char-name');
   const name = nameInput ? nameInput.value.trim() : '';
   
@@ -286,9 +429,35 @@ function saveSettings() {
     return;
   }
   
-  localStorage.setItem('charName', name);
-  updateCharacterDisplay();
-  showSuccessMessage('Имя персонажа сохранено! 🎉');
+  try {
+    const userInfo = getUserInfo();
+    const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/settings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        settings: {
+          charName: name,
+          characterImg: localStorage.getItem('characterImg') || 'images/1.png'
+        }
+      })
+    });
+
+    if (response.ok) {
+      localStorage.setItem('charName', name); // Сохраняем локально для быстрого доступа
+      updateCharacterDisplay();
+      showSuccessMessage('Имя персонажа сохранено на сервере! 🎉');
+    } else {
+      throw new Error('Ошибка сервера');
+    }
+  } catch (error) {
+    console.log('Ошибка сохранения настроек, сохраняем локально:', error);
+    // Fallback: сохраняем локально
+    localStorage.setItem('charName', name);
+    updateCharacterDisplay();
+    showSuccessMessage('Имя персонажа сохранено (оффлайн режим)! 🎉');
+  }
 }
 
 function updateCharacterDisplay() {
@@ -341,10 +510,33 @@ function initializeCharacterSelector() {
   }
 }
 
-function changeCharacter(imgPath) {
+async function changeCharacter(imgPath) {
   const img = document.getElementById('character-img');
   if (img) {
     img.src = imgPath;
+    
+    try {
+      const userInfo = getUserInfo();
+      const response = await fetch(`${API_BASE}/api/user/${userInfo.id}/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          settings: {
+            characterImg: imgPath,
+            charName: localStorage.getItem('charName') || 'Лавчик'
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка сервера');
+      }
+    } catch (error) {
+      console.log('Ошибка сохранения внешности, сохраняем локально:', error);
+    }
+    
     localStorage.setItem('characterImg', imgPath);
     
     const options = document.querySelectorAll('.character-option');
@@ -495,7 +687,12 @@ function initializeTasks() {
 function saveTasksToStorage() {
   try {
     localStorage.setItem('tasks', JSON.stringify(tasks));
-    console.log('Задания сохранены:', tasks);
+    console.log('Задания сохранены локально:', tasks);
+    
+    // Автоматически сохраняем прогресс на сервер
+    saveFullUserState().catch(error => {
+      console.log('Ошибка сохранения прогресса заданий:', error);
+    });
   } catch (e) {
     console.error('Ошибка сохранения заданий:', e);
   }
@@ -684,10 +881,8 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
   try {
     const userInfo = getUserInfo();
     
-    // Сначала проверяем, не было ли это задание ранее отклонено
     const taskIndex = tasks.findIndex(t => t.id === taskId);
     if (taskIndex !== -1 && tasks[taskIndex].wasRejected) {
-      // Убираем пометку о предыдущем отклонении
       tasks[taskIndex].wasRejected = false;
     }
     
@@ -711,6 +906,9 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
       
       showNotification('📸 Фото отправлено на проверку! Ожидайте начисления лавок.', 'success');
       markTaskAsPending(taskId);
+      
+      // Сохраняем состояние после отправки
+      saveFullUserState();
     } else {
       throw new Error('Ошибка сервера');
     }
@@ -725,7 +923,7 @@ async function completeTaskWithPhoto(taskId, photoDataUrl) {
       
       lavki += tasks[taskIndex].reward;
       updateLavki();
-      saveTasksToStorage();
+      saveTasksToStorage(); // Это вызовет автосохранение
       renderTasks();
       animateCharacterReward();
       
@@ -739,9 +937,8 @@ function markTaskAsPending(taskId) {
   if (taskIndex !== -1) {
     tasks[taskIndex].pendingApproval = true;
     tasks[taskIndex].completed = false;
-    // Убираем пометку о предыдущем отклонении при новой отправке
     tasks[taskIndex].wasRejected = false;
-    saveTasksToStorage();
+    saveTasksToStorage(); // Автосохранение
     renderTasks();
   }
 }
@@ -967,6 +1164,32 @@ function showNotification(message, type = 'info') {
 }
 
 // =====================
+// 💾 РУЧНОЕ УПРАВЛЕНИЕ СОХРАНЕНИЕМ
+// =====================
+
+// Принудительное сохранение
+async function forceSave() {
+  showNotification('💾 Сохраняем данные...', 'info');
+  await saveFullUserState();
+  showNotification('✅ Все данные сохранены!', 'success');
+}
+
+// Принудительная загрузка
+async function loadFromServer() {
+  showNotification('🔄 Загружаем данные...', 'info');
+  const success = await loadFullUserState();
+  if (success) {
+    showNotification('✅ Данные загружены с сервера!', 'success');
+  } else {
+    showNotification('❌ Ошибка загрузки данных', 'error');
+  }
+}
+
+// Сделайте функции глобальными
+window.forceSave = forceSave;
+window.loadFromServer = loadFromServer;
+
+// =====================
 // 🚀 ОСНОВНАЯ ИНИЦИАЛИЗАЦИЯ
 // =====================
 
@@ -985,39 +1208,47 @@ document.addEventListener('DOMContentLoaded', () => {
   showScreen('character');
   if (navButtons[0]) navButtons[0].classList.add('active');
 
-  loadCharacter();
-  updateLavki();
-  initializeTasks();
-  renderTasks();
-  loadCharacterName();
-  initializeCharacterSelector();
-  initializeDisplayValues();
-  checkImages();
-  
-  // ДОБАВЛЕНО: Инициализация пользователя при загрузке
+  // СНАЧАЛА пробуем загрузить полное состояние с сервера
   setTimeout(() => {
-    initializeUser();
-  }, 500);
-  
-  setTimeout(() => {
-    updateLavki();
-    updateCharacterDisplay();
-    updateStats();
+    loadFullUserState().then(success => {
+      if (!success) {
+        // Если не удалось загрузить с сервера, используем локальные данные
+        console.log('Используем локальные данные');
+        lavki = parseInt(localStorage.getItem('lavki')) || 0;
+        initializeTasks();
+        loadCharacter();
+        updateLavki();
+      }
+      
+      // Инициализируем остальное в любом случае
+      renderTasks();
+      loadCharacterName();
+      initializeCharacterSelector();
+      initializeDisplayValues();
+      checkImages();
+      
+      // Инициализация пользователя
+      initializeUser();
+    });
   }, 100);
+
+  // Периодическое автосохранение каждые 30 секунд
+  setInterval(() => {
+    saveFullUserState();
+  }, 30000);
+
+  // Сохраняем при закрытии/обновлении страницы
+  window.addEventListener('beforeunload', () => {
+    saveFullUserState();
+  });
 
   setTimeout(() => {
     initializeWithServer();
   }, 1000);
   
-  // =====================
-  // 🔄 ЗАПУСК ПРОВЕРКИ ПОДТВЕРЖДЕННЫХ ЗАДАНИЙ
-  // =====================
-  
-  // Запускаем проверку подтвержденных заданий
   setTimeout(() => {
     startTaskChecking();
-    startTasksSync(); // ДОБАВЛЕНО: синхронизация заданий
-    // Первая проверка через 5 секунд после загрузки
+    startTasksSync();
     setTimeout(checkApprovedTasks, 5000);
     setTimeout(checkRejectedTasks, 5000);
   }, 2000);
