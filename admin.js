@@ -28,7 +28,6 @@ async function apiCall(endpoint, options = {}) {
 
 // Улучшенные уведомления
 function showNotification(message, type = 'info') {
-  // Создаем красивый toast вместо alert
   const notification = document.createElement('div');
   notification.innerHTML = `
     <div style="
@@ -483,7 +482,7 @@ async function loadUsers() {
     }
 }
 
-// ДОБАВЛЕНО: Сброс персонажа пользователя
+// Сброс персонажа пользователя
 async function resetUserCharacter(userId) {
   if (!confirm(`🚨 ВНИМАНИЕ: Вы уверены, что хотите полностью сбросить персонажа пользователя?\n\nЭто действие НЕОБРАТИМО и приведет к:\n• Обнулению всех лавок\n• Сбросу прогресса заданий\n• Удалению истории покупок\n• Сбросу всей статистики`)) return;
   
@@ -846,9 +845,8 @@ function startAutoRefresh() {
       } else if (sectionId === 'section-dashboard') {
         loadDashboard();
       }
-      // Для других разделов обновляем по необходимости
     }
-  }, 30000); // 30 секунд
+  }, 30000);
 }
 
 // Запускаем автообновление после загрузки
@@ -859,6 +857,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'block';
     loadDashboard();
-    startAutoRefresh(); // Запускаем автообновление
+    startAutoRefresh();
   }
 });
