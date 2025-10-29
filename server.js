@@ -79,7 +79,9 @@ app.post('/api/initialize-user', (req, res) => {
       completedTasks: 0,
       lastActivity: new Date().toISOString(),
       userName: userName || 'Аноним',
-      userContact: userContact || 'Не указан'
+      userContact: userContact || 'Не указан',
+      settings: {},
+      gameState: {}
     };
     saveData(data);
     console.log('Новый пользователь создан:', userId);
@@ -118,7 +120,9 @@ app.post('/api/submit-task', (req, res) => {
       completedTasks: 0,
       lastActivity: new Date().toISOString(),
       userName: userName || 'Аноним',
-      userContact: userContact || 'Не указан'
+      userContact: userContact || 'Не указан',
+      settings: {},
+      gameState: {}
     };
   } else {
     data.users[userId].lastActivity = new Date().toISOString();
@@ -400,6 +404,8 @@ app.post('/api/admin/users/:userId/reset', requireAuth, (req, res) => {
   data.users[userId].lavki = 0;
   data.users[userId].completedTasks = 0;
   data.users[userId].lastActivity = new Date().toISOString();
+  data.users[userId].settings = {};
+  data.users[userId].gameState = {};
   
   // Удаляем все submissions пользователя
   data.submissions = data.submissions.filter(s => s.userId !== userId);
@@ -417,6 +423,82 @@ app.post('/api/admin/users/:userId/reset', requireAuth, (req, res) => {
   saveData(data);
   
   res.json({ success: true, message: 'Персонаж пользователя сброшен' });
+});
+
+// ======================
+// 💾 ПОЛНОЕ СОХРАНЕНИЕ СОСТОЯНИЯ ПОЛЬЗОВАТЕЛЯ
+// ======================
+
+// Сохранить полное состояние пользователя
+app.post('/api/user/:userId/state', (req, res) => {
+  const { state } = req.body;
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  if (!data.users[userId]) {
+    // Создаем пользователя если не существует
+    data.users[userId] = {
+      lavki: 0,
+      registrationDate: new Date().toISOString(),
+      completedTasks: 0,
+      lastActivity: new Date().toISOString(),
+      userName: 'Аноним',
+      userContact: 'Не указан',
+      settings: {},
+      gameState: {}
+    };
+  }
+  
+  // Сохраняем полное состояние
+  data.users[userId].gameState = { 
+    ...data.users[userId].gameState, 
+    ...state 
+  };
+  data.users[userId].lastActivity = new Date().toISOString();
+  data.users[userId].lavki = state.lavki !== undefined ? state.lavki : data.users[userId].lavki;
+  
+  saveData(data);
+  res.json({ success: true, state: data.users[userId].gameState });
+});
+
+// Получить полное состояние пользователя
+app.get('/api/user/:userId/state', (req, res) => {
+  const data = loadData();
+  const userId = req.params.userId;
+  
+  const user = data.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: 'Пользователь не найден' });
+  }
+  
+  res.json({
+    lavki: user.lavki || 0,
+    settings: user.settings || {},
+    gameState: user.gameState || {},
+    completedTasks: user.completedTasks || 0,
+    registrationDate: user.registrationDate
+  });
+});
+
+// Сохранить прогресс заданий
+app.post('/api/user/:userId/tasks-progress', (req, res) => {
+  const { tasksProgress } = req.body;
+  const userId = req.params.userId;
+  const data = loadData();
+  
+  if (!data.users[userId]) {
+    return res.status(404).json({ error: 'Пользователь не найден' });
+  }
+  
+  if (!data.users[userId].gameState) {
+    data.users[userId].gameState = {};
+  }
+  
+  data.users[userId].gameState.tasksProgress = tasksProgress;
+  data.users[userId].lastActivity = new Date().toISOString();
+  
+  saveData(data);
+  res.json({ success: true });
 });
 
 // ======================
@@ -473,7 +555,9 @@ app.post('/api/admin/submissions/:id/approve', requireAuth, (req, res) => {
     data.users[userId] = { 
       lavki: 0,
       completedTasks: 0,
-      registrationDate: new Date().toISOString()
+      registrationDate: new Date().toISOString(),
+      settings: {},
+      gameState: {}
     };
   }
   data.users[userId].lavki += submission.reward;
